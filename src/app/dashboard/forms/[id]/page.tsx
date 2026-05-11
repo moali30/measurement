@@ -47,7 +47,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       // Server Action - no direct Appwrite connection!
       const result = await loadFormDetailServer(params.id);
       if (result.success) {
-        setForm(result.form as FormData);
+        setForm({ ...(result.form as FormData), description: (result.form as FormData).description || "" });
         setQuestions(result.questions as Question[]);
         setResponses(result.responses as Response[]);
         setAnswers(result.answers as Answer[]);
@@ -63,7 +63,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     if (!form) return;
     setSaving(true);
     try {
-      await updateFormServer(form.$id, { title: form.title, description: form.description });
+      const descToSave = form.description || "";
+      const formResult = await updateFormServer(form.$id, { title: form.title, description: descToSave });
+      if (!formResult.success) { alert("خطأ في حفظ بيانات الاستبيان: " + (formResult.error || "")); setSaving(false); return; }
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
         const isNew = q.$id.startsWith("new_");
@@ -562,7 +564,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
             <div className="p-6">
               <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full text-2xl font-bold border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="عنوان الاستبيان" />
-              <textarea value={form.description.replace("[single_response]", "").trim()} onChange={e => setForm({ ...form, description: e.target.value + (form.description.includes("[single_response]") ? "\n[single_response]" : "") })} rows={4} className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors text-sm resize-none" placeholder="وصف تفصيلي للاستبيان..." />
+              <textarea value={(form.description || "").replace("[single_response]", "").trim()} onChange={e => { const hasSingle = (form.description || "").includes("[single_response]"); setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); }} rows={4} className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors text-sm resize-none" placeholder="وصف تفصيلي للاستبيان..." />
               <div className="mt-4 flex items-center justify-between bg-blue-50/50 p-3 rounded-xl border border-blue-100">
                 <div>
                   <h4 className="text-sm font-semibold text-gray-800">منع الردود المتعددة</h4>
