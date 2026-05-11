@@ -93,7 +93,7 @@ export async function importBatchResponses(
 
       // Random submit date
       const randomDays = Math.floor(Math.random() * maxDays);
-      const randomHours = Math.floor(Math.random() * 24);
+      const randomHours = 9 + Math.floor(Math.random() * 8); // 9 AM to 4 PM
       const randomMinutes = Math.floor(Math.random() * 60);
       const submitDate = new Date(startDate);
       submitDate.setDate(submitDate.getDate() + randomDays);

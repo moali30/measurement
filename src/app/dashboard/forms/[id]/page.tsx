@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image } from "lucide-react";
+import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer } from "@/app/actions/dashboard";
@@ -29,6 +29,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [exporting, setExporting] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [selectedResponse, setSelectedResponse] = useState<Response | null>(null);
 
   // Helper functions moved to top
   const fmtDate = (d: string) => { 
@@ -209,7 +210,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         for (let i = 0; i < dataRows.length; i++) {
           const row = dataRows[i];
           const randomDays = Math.floor(Math.random() * maxDays);
-          const randomHours = Math.floor(Math.random() * 24);
+          const randomHours = 9 + Math.floor(Math.random() * 8); // 9 AM to 4 PM
           const randomMinutes = Math.floor(Math.random() * 60);
           const submitDate = new Date(startDate);
           submitDate.setDate(submitDate.getDate() + randomDays);
@@ -679,14 +680,62 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
           )}
           {responses.length > 0 && (
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b bg-gray-50"><h3 className="text-sm font-semibold text-gray-700">سجل الردود</h3></div>
+              <div className="px-5 py-3 border-b bg-gray-50"><h3 className="text-sm font-semibold text-gray-700">سجل الردود (اضغط على أي رد لعرض إجاباته)</h3></div>
               <div className="divide-y divide-gray-50 max-h-96 overflow-auto">
                 {responses.map((r, ri) => (
-                  <div key={r.$id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
-                    <div className="flex items-center gap-3"><span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">{ri + 1}</span><span className="text-sm text-gray-700">رد #{ri + 1}</span></div>
-                    <span className="text-xs text-gray-400">{fmtDate(r.submittedAt)}</span>
+                  <div key={r.$id} onClick={() => setSelectedResponse(r)} className="px-5 py-3 flex items-center justify-between hover:bg-blue-50 cursor-pointer transition-colors group">
+                    <div className="flex items-center gap-3"><span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold group-hover:bg-blue-100">{ri + 1}</span><span className="text-sm text-gray-700">رد #{ri + 1}</span></div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{fmtDate(r.submittedAt)}</span>
+                      <Eye size={14} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+                    </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Response Detail Modal */}
+          {selectedResponse && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedResponse(null)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-l from-blue-50 to-white">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">تفاصيل الرد #{responses.indexOf(selectedResponse) + 1}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{fmtDate(selectedResponse.submittedAt)}</p>
+                  </div>
+                  <button onClick={() => setSelectedResponse(null)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
+                </div>
+                {/* Answers */}
+                <div className="overflow-y-auto max-h-[65vh] p-6 space-y-4">
+                  {questions.map((q, qi) => {
+                    const a = answers.find(ans => ans.responseId === selectedResponse.$id && ans.questionId === q.$id);
+                    let ansText = "—";
+                    if (a) {
+                      let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
+                      if (a.selectedOptions && a.selectedOptions.length) {
+                        ansText = a.selectedOptions.join("، ");
+                      } else if (valStr) {
+                        ansText = valStr;
+                        if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && q.options.length === 5) {
+                          ansText = q.options[5 - parseInt(valStr)];
+                        }
+                      }
+                    }
+                    return (
+                      <div key={q.$id} className="border-b border-gray-100 pb-3 last:border-0">
+                        <div className="flex items-start gap-2">
+                          <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{qi + 1}</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-800 mb-1">{q.text}</p>
+                            <div className={`text-sm px-3 py-1.5 rounded-lg inline-block ${ansText === "—" ? "bg-gray-50 text-gray-400" : "bg-blue-50 text-blue-700 font-medium"}`}>{ansText}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
