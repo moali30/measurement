@@ -18,11 +18,29 @@ export default function LoginPage() {
     setError("");
 
     try {
-      try { await account.deleteSession("current"); } catch { /* ok */ }
-      await account.createEmailPasswordSession(email, password);
+      // Don't delete existing sessions - allow multiple device login
+      try { 
+        await account.createEmailPasswordSession(email, password);
+      } catch (sessionErr: any) {
+        // If already has a session, try to use it
+        if (sessionErr?.code === 401 || sessionErr?.type === 'user_already_has_session') {
+          // Already logged in, just redirect
+          window.location.href = "/dashboard";
+          return;
+        }
+        throw sessionErr;
+      }
       window.location.href = "/dashboard";
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "فشل تسجيل الدخول. يرجى التحقق من بياناتك.");
+    } catch (err: any) {
+      const msg = err?.message || "فشل تسجيل الدخول. يرجى التحقق من بياناتك.";
+      // Make error messages more user-friendly
+      if (msg.includes("fetch") || msg.includes("Failed") || msg.includes("network")) {
+        setError("خطأ في الاتصال بالخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.");
+      } else if (msg.includes("Invalid credentials") || msg.includes("password")) {
+        setError("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
