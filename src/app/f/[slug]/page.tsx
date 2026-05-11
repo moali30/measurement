@@ -44,8 +44,9 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
     try {
       const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
       // Find form by slug
+      const decodedSlug = decodeURIComponent(params.slug);
       const formsRes = await databases.listDocuments(db, "forms", [
-        Query.equal("slug", params.slug),
+        Query.equal("slug", decodedSlug),
         Query.limit(1),
       ]);
 
