@@ -14,84 +14,93 @@ function getAdminClient() {
 
 /**
  * Login via Server Action - bypasses CORS completely.
- * Creates session server-side and stores in cookie.
+ * Verifies credentials using Admin SDK, stores user info in cookie.
  */
 export async function serverLogin(email: string, password: string) {
   try {
-    // Create a client WITHOUT API key to act as regular user
-    const client = new Client()
+    // Use Admin SDK to list users and verify by email
+    const users = new Users(getAdminClient());
+    
+    // First verify the email/password by creating a session via anonymous client
+    const anonClient = new Client()
       .setEndpoint(config.appwriteUrl)
       .setProject(config.projectId);
     
-    const account = new Account(client);
-    const session = await account.createEmailPasswordSession(email, password);
+    const account = new Account(anonClient);
     
-    // Store session secret in a secure cookie on Vercel domain
+    let session;
+    try {
+      session = await account.createEmailPasswordSession(email, password);
+    } catch (loginErr: any) {
+      const msg = loginErr?.message || "";
+      if (msg.includes("Invalid credentials") || msg.includes("password") || msg.includes("user_invalid_credentials")) {
+        return { success: false, error: "البريد الإلكتروني أو كلمة المرور غير صحيحة." };
+      }
+      throw loginErr;
+    }
+    
+    // Get user info using Admin SDK
+    const userList = await users.list([`email("${email}")`]);
+    const userDoc = userList.users[0];
+    
+    if (!userDoc) {
+      return { success: false, error: "المستخدم غير موجود." };
+    }
+    
+    // Store session info in cookies on Vercel domain
     const cookieStore = await cookies();
+    
+    // Store session secret for API calls that need user context
     cookieStore.set('appwrite_session', session.secret, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    });
-    
-    // Also store user ID for quick access
-    cookieStore.set('user_id', session.userId, {
-      httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 30,
     });
     
-    return { success: true, userId: session.userId };
+    // Store user data directly in cookie (so we don't need to call Appwrite to check auth)
+    const userData = JSON.stringify({
+      $id: userDoc.$id,
+      name: userDoc.name,
+      email: userDoc.email,
+      registration: userDoc.registration,
+    });
+    
+    cookieStore.set('user_data', userData, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    
+    return { success: true, userId: userDoc.$id };
   } catch (error: any) {
-    const msg = error?.message || "";
-    if (msg.includes("Invalid credentials") || msg.includes("password")) {
-      return { success: false, error: "البريد الإلكتروني أو كلمة المرور غير صحيحة." };
-    }
-    return { success: false, error: msg || "فشل تسجيل الدخول." };
+    console.error("Login error:", error);
+    return { success: false, error: error?.message || "فشل تسجيل الدخول." };
   }
 }
 
 /**
- * Get current user from session cookie - bypasses CORS.
+ * Get current user from cookie - NO Appwrite call needed for basic check.
  */
 export async function getServerUser() {
   try {
     const cookieStore = await cookies();
-    const sessionSecret = cookieStore.get('appwrite_session')?.value;
+    const userData = cookieStore.get('user_data')?.value;
     
-    if (!sessionSecret) {
+    if (!userData) {
       return { success: false, user: null };
     }
     
-    // Use session to authenticate
-    const client = new Client()
-      .setEndpoint(config.appwriteUrl)
-      .setProject(config.projectId)
-      .setSession(sessionSecret);
-    
-    const account = new Account(client);
-    const user = await account.get();
-    
-    return { 
-      success: true, 
-      user: {
-        $id: user.$id,
-        name: user.name,
-        email: user.email,
-        registration: user.registration,
-      }
-    };
-  } catch (error: any) {
-    // Session expired or invalid - clear cookies
     try {
-      const cookieStore = await cookies();
-      cookieStore.delete('appwrite_session');
-      cookieStore.delete('user_id');
-    } catch {}
+      const user = JSON.parse(userData);
+      return { success: true, user };
+    } catch {
+      return { success: false, user: null };
+    }
+  } catch {
     return { success: false, user: null };
   }
 }
@@ -105,7 +114,6 @@ export async function serverLogout() {
     const sessionSecret = cookieStore.get('appwrite_session')?.value;
     
     if (sessionSecret) {
-      // Delete session from Appwrite
       try {
         const client = new Client()
           .setEndpoint(config.appwriteUrl)
@@ -116,18 +124,17 @@ export async function serverLogout() {
       } catch {}
     }
     
-    // Clear cookies
     cookieStore.delete('appwrite_session');
-    cookieStore.delete('user_id');
+    cookieStore.delete('user_data');
     
     return { success: true };
   } catch {
-    return { success: true }; // Always succeed logout
+    return { success: true };
   }
 }
 
 /**
- * Update user name - server-side.
+ * Update user name - server-side using session.
  */
 export async function updateNameServer(name: string) {
   try {
@@ -142,6 +149,21 @@ export async function updateNameServer(name: string) {
     
     const account = new Account(client);
     await account.updateName(name);
+    
+    // Update cached user data
+    const userData = cookieStore.get('user_data')?.value;
+    if (userData) {
+      const user = JSON.parse(userData);
+      user.name = name;
+      cookieStore.set('user_data', JSON.stringify(user), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    }
+    
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -149,7 +171,7 @@ export async function updateNameServer(name: string) {
 }
 
 /**
- * Change password - server-side.
+ * Change password - server-side using session.
  */
 export async function changePasswordServer(newPassword: string, oldPassword: string) {
   try {
