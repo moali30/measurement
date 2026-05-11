@@ -342,16 +342,16 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
           const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
           const nameA = nameQ ? answers.find(a => a.responseId === r.$id && a.questionId === nameQ.$id) : null;
           const studentName = nameA?.textValue || "";
-          const nameLabel = studentName ? `<p style="font-size: 15px; font-weight: 600; color: #1e40af; margin: 6px 0 0 0;">${studentName}</p>` : "";
+          const nameLabel = studentName ? `<p style="font-size: 15px; font-weight: 600; color: #111; margin: 6px 0 0 0;">${studentName}</p>` : "";
           let html = `<div dir="rtl" style="font-family: system-ui, -apple-system, sans-serif; padding-top: 10px; background-color: white; color: black; line-height: 1.5;">`;
           let headerHtml = ``;
           if (b64College || b64University || b64Quality) {
             headerHtml = `
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
                 <div style="width: 80px;">${b64Quality ? `<img src="${b64Quality}" style="max-height: 80px; max-width: 100%; object-fit: contain;" />` : ''}</div>
                 <div style="text-align: center; flex: 1; padding: 0 15px;">
                   <h1 style="font-size: 22px; font-weight: bold; margin: 0 0 5px 0; color: black;">${form.title}</h1>
-                  <p style="color: #6b7280; font-size: 13px; margin: 0;">رد #${ri + 1} | ${fmtDate(r.submittedAt)}</p>
+                  <p style="color: #444; font-size: 13px; margin: 0;">رد #${ri + 1} | ${fmtDate(r.submittedAt)}</p>
                   ${nameLabel}
                 </div>
                 <div style="width: 80px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
@@ -361,9 +361,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               </div>`;
           } else {
             headerHtml = `
-              <div style="text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 20px;">
+              <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px;">
                 <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 10px 0; color: black;">${form.title}</h1>
-                <p style="color: #6b7280; font-size: 14px; margin: 0;">رد #${ri + 1} | التاريخ: ${fmtDate(r.submittedAt)}</p>
+                <p style="color: #444; font-size: 14px; margin: 0;">رد #${ri + 1} | التاريخ: ${fmtDate(r.submittedAt)}</p>
                 ${nameLabel}
               </div>`;
           }
@@ -379,7 +379,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                 body { margin: 0; padding: 0; background: #e5e7eb; font-family: system-ui, -apple-system, sans-serif; }
                 * { box-sizing: border-box; border-style: solid; border-width: 0; border-color: #e5e7eb; }
                 .page { width: 794px; height: 1123px; padding: 40px; background: white; position: relative; overflow: hidden; margin-bottom: 10px; }
-                .footer { position: absolute; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 11px; color: #9ca3af; border-top-width: 1px; padding-top: 10px; }
+                .footer { position: absolute; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #000; padding-top: 8px; margin: 0 40px; width: calc(100% - 80px); }
               </style>
             </head>
             <body>
@@ -419,14 +419,14 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             }
 
             const qEl = doc.createElement("div");
-            qEl.style.cssText = `border-bottom: 1px solid #f3f4f6; padding: 14px 20px; margin-bottom: 4px; background: ${qi % 2 === 0 ? '#fafbfc' : 'white'}; border-radius: 8px;`;
-            const categoryTag = q.minLabel ? `<span style="display: inline-block; font-size: 10px; background: #f3e8ff; color: #7c3aed; padding: 2px 8px; border-radius: 10px; margin-right: 8px;">${q.minLabel}</span>` : '';
+            qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${qi % 2 === 0 ? '#f8f8f8' : 'white'};`;
+            const categoryTag = q.minLabel ? `<span style="display: inline-block; font-size: 9px; border: 1px solid #999; color: #333; padding: 1px 6px; border-radius: 3px; margin-right: 6px;">${q.minLabel}</span>` : '';
             qEl.innerHTML = `
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eff6ff; color: #2563eb; font-size: 13px; font-weight: 700; flex-shrink: 0;">${qi + 1}</span>
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${qi + 1}</span>
                   <div style="flex: 1;">
-                    <h3 style="font-size: 14px; font-weight: 600; color: #1f2937; margin: 0 0 6px 0;">${q.text}${categoryTag}</h3>
-                    <div style="display: inline-block; font-size: 13px; padding: 4px 14px; border-radius: 8px; ${ansText === '—' ? 'background: #f9fafb; color: #9ca3af;' : 'background: #eff6ff; color: #1e40af; font-weight: 500; border: 1px solid #dbeafe;'}">${ansText}</div>
+                    <h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}${categoryTag}</h3>
+                    <div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div>
                   </div>
                 </div>
             `;
@@ -478,6 +478,104 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         if (iframe && document.body.contains(iframe)) document.body.removeChild(iframe);
         setPrintingPdf(false);
       }
+  };
+
+  const exportSinglePDF = async (responseIndex: number) => {
+    if (!form || !responses[responseIndex]) return;
+    setPrintingPdf(true);
+    let iframe: HTMLIFrameElement | null = null;
+    try {
+      const [jsPDFModule, fileSaverModule, html2canvasModule] = await Promise.all([
+        import("jspdf"), import("file-saver"), import("html2canvas")
+      ]);
+      const jsPDF = jsPDFModule.jsPDF || (jsPDFModule as any).default?.jsPDF || (jsPDFModule as any).default;
+      const saveAs = fileSaverModule.saveAs || fileSaverModule.default?.saveAs || fileSaverModule.default;
+      const html2canvas = html2canvasModule.default || html2canvasModule;
+
+      iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:absolute;top:-9999px;left:-9999px;width:210mm;height:10000px;border:none;visibility:hidden;";
+      document.body.appendChild(iframe);
+
+      const b64College = form.collegeLogo ? await getBase64ImageFromUrl(form.collegeLogo) : "";
+      const b64University = form.universityLogo ? await getBase64ImageFromUrl(form.universityLogo) : "";
+      const b64Quality = form.qualityLogo ? await getBase64ImageFromUrl(form.qualityLogo) : "";
+
+      const r = responses[responseIndex];
+      const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
+      const nameA = nameQ ? answers.find(a => a.responseId === r.$id && a.questionId === nameQ.$id) : null;
+      const studentName = nameA?.textValue || "";
+      const nameLabel = studentName ? `<p style="font-size: 15px; font-weight: 600; color: #111; margin: 6px 0 0 0;">${studentName}</p>` : "";
+
+      let headerHtml = "";
+      if (b64College || b64University || b64Quality) {
+        headerHtml = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
+          <div style="width: 80px;">${b64Quality ? `<img src="${b64Quality}" style="max-height: 80px; max-width: 100%; object-fit: contain;" />` : ''}</div>
+          <div style="text-align: center; flex: 1; padding: 0 15px;">
+            <h1 style="font-size: 22px; font-weight: bold; margin: 0 0 5px 0; color: black;">${form.title}</h1>
+            <p style="color: #444; font-size: 13px; margin: 0;">رد #${responseIndex + 1} | ${fmtDate(r.submittedAt)}</p>${nameLabel}
+          </div>
+          <div style="width: 80px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
+            ${b64University ? `<img src="${b64University}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />` : ''}
+            ${b64College ? `<img src="${b64College}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />` : ''}
+          </div>
+        </div>`;
+      } else {
+        headerHtml = `<div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px;">
+          <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 10px 0; color: black;">${form.title}</h1>
+          <p style="color: #444; font-size: 14px; margin: 0;">رد #${responseIndex + 1} | التاريخ: ${fmtDate(r.submittedAt)}</p>${nameLabel}
+        </div>`;
+      }
+
+      const doc = iframe.contentWindow!.document;
+      doc.open();
+      doc.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><style>
+        body { margin: 0; padding: 0; background: white; font-family: system-ui, -apple-system, sans-serif; }
+        * { box-sizing: border-box; border-style: solid; border-width: 0; border-color: #ddd; }
+        .page { width: 794px; height: 1123px; padding: 40px; background: white; position: relative; overflow: hidden; margin-bottom: 10px; }
+        .footer { position: absolute; bottom: 20px; left: 40px; width: calc(100% - 80px); text-align: center; font-size: 10px; color: #666; border-top: 1px solid #000; padding-top: 8px; }
+      </style></head><body><div id="printContainer"></div></body></html>`);
+      doc.close();
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const container = doc.getElementById("printContainer")!;
+      let currentPage = doc.createElement("div"); currentPage.className = "page"; container.appendChild(currentPage);
+      const headerEl = doc.createElement("div"); headerEl.innerHTML = headerHtml; currentPage.appendChild(headerEl);
+      let currentY = 40 + headerEl.offsetHeight;
+
+      for (let qi = 0; qi < questions.length; qi++) {
+        const q = questions[qi];
+        const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
+        let ansText = "—";
+        if (a) {
+          let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
+          if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); }
+          else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } }
+        }
+        const qEl = doc.createElement("div");
+        qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${qi % 2 === 0 ? '#f8f8f8' : 'white'};`;
+        const catTag = q.minLabel ? `<span style="display: inline-block; font-size: 9px; border: 1px solid #999; color: #333; padding: 1px 6px; border-radius: 3px; margin-right: 6px;">${q.minLabel}</span>` : '';
+        qEl.innerHTML = `<div style="display: flex; align-items: flex-start; gap: 10px;">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${qi + 1}</span>
+          <div style="flex: 1;"><h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}${catTag}</h3>
+          <div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div></div></div>`;
+        currentPage.appendChild(qEl);
+        if (currentY + qEl.offsetHeight > 1050) { currentPage.removeChild(qEl); const ft = doc.createElement("div"); ft.className = "footer"; ft.innerText = "AEMS - نظام إدارة القياس والتقويم الأكاديمي"; currentPage.appendChild(ft); currentPage = doc.createElement("div"); currentPage.className = "page"; container.appendChild(currentPage); currentPage.appendChild(qEl); currentY = 40 + qEl.offsetHeight; }
+        else { currentY += qEl.offsetHeight; }
+      }
+      const ft = doc.createElement("div"); ft.className = "footer"; ft.innerText = "AEMS - نظام إدارة القياس والتقويم الأكاديمي"; currentPage.appendChild(ft);
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pages = doc.querySelectorAll('.page');
+      for (let pIdx = 0; pIdx < pages.length; pIdx++) {
+        if (pIdx > 0) pdf.addPage();
+        const canvas = await html2canvas(pages[pIdx] as HTMLElement, { scale: 2, useCORS: true, logging: false });
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, 210, 297);
+      }
+      const fileName = studentName ? `${studentName}.pdf` : `response_${responseIndex + 1}.pdf`;
+      saveAs(new Blob([pdf.output("arraybuffer")], { type: "application/pdf" }), fileName);
+    } catch (e: any) { console.error(e); alert("خطأ: " + (e?.message || "")); }
+    finally { if (iframe && document.body.contains(iframe)) document.body.removeChild(iframe); setPrintingPdf(false); }
   };
 
   const getAnalytics = () => {
@@ -544,7 +642,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       <div className="flex border-b border-gray-200">
         <button onClick={() => setActiveTab("edit")} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "edit" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Edit3 size={14} className="inline ml-1.5" />تعديل الأسئلة</button>
         <button onClick={() => setActiveTab("responses")} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "responses" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><BarChart2 size={14} className="inline ml-1.5" />التقرير والردود ({responses.length})</button>
-        <button onClick={() => { setActiveTab("individual"); setCurrentResponseIndex(0); }} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "individual" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Users size={14} className="inline ml-1.5" />ردود الطلاب</button>
+        <button onClick={() => { setActiveTab("individual"); setCurrentResponseIndex(0); }} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "individual" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Users size={14} className="inline ml-1.5" />الردود منفردة</button>
       </div>
 
       {activeTab === "edit" && (
@@ -819,6 +917,10 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                             <p className="text-sm text-gray-500 mt-0.5">رد #{currentResponseIndex + 1} من {responses.length} • {fmtDate(r.submittedAt)}</p>
                           </div>
                           <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" disabled={printingPdf} onClick={() => exportSinglePDF(currentResponseIndex)} className="rounded-xl h-9 flex gap-1.5 px-3 text-xs">
+                              <Printer size={14}/>{printingPdf ? "جاري..." : "تصدير PDF"}
+                            </Button>
+                            <div className="w-px h-6 bg-gray-200"></div>
                             <Button variant="outline" size="sm" disabled={currentResponseIndex === 0} onClick={() => setCurrentResponseIndex(i => i - 1)} className="rounded-xl h-9 w-9 p-0"><ChevronRight size={16}/></Button>
                             <span className="text-sm font-medium text-gray-600 min-w-[60px] text-center">{currentResponseIndex + 1} / {responses.length}</span>
                             <Button variant="outline" size="sm" disabled={currentResponseIndex === responses.length - 1} onClick={() => setCurrentResponseIndex(i => i + 1)} className="rounded-xl h-9 w-9 p-0"><ChevronLeft size={16}/></Button>
