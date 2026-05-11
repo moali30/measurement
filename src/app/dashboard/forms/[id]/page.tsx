@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X } from "lucide-react";
+import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer } from "@/app/actions/dashboard";
@@ -14,7 +14,7 @@ interface Question { $id: string; text: string; type: string; options: string[];
 interface Response { $id: string; submittedAt: string; }
 interface Answer { $id: string; responseId: string; questionId: string; textValue?: string; numberValue?: number; selectedOptions?: string[]; }
 
-type Tab = "edit" | "responses";
+type Tab = "edit" | "responses" | "individual";
 
 export default function FormDetailPage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
@@ -30,6 +30,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [printingPdf, setPrintingPdf] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedResponse, setSelectedResponse] = useState<Response | null>(null);
+  const [currentResponseIndex, setCurrentResponseIndex] = useState(0);
 
   // Helper functions moved to top
   const fmtDate = (d: string) => { 
@@ -66,7 +67,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
         const isNew = q.$id.startsWith("new_");
-        await saveQuestionServer(q.$id, form.$id, { text: q.text, type: q.type, options: q.options, required: q.required, order: i }, isNew);
+        await saveQuestionServer(q.$id, form.$id, { text: q.text, type: q.type, options: q.options, required: q.required, order: i, minLabel: q.minLabel || null }, isNew);
       }
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (e) { console.error(e); alert("خطأ أثناء الحفظ"); }
@@ -335,6 +336,11 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
 
         for (let ri = 0; ri < responses.length; ri++) {
           const r = responses[ri];
+          // Find student name from the "الاسم" question
+          const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
+          const nameA = nameQ ? answers.find(a => a.responseId === r.$id && a.questionId === nameQ.$id) : null;
+          const studentName = nameA?.textValue || "";
+          const nameLabel = studentName ? `<p style="font-size: 15px; font-weight: 600; color: #1e40af; margin: 6px 0 0 0;">${studentName}</p>` : "";
           let html = `<div dir="rtl" style="font-family: system-ui, -apple-system, sans-serif; padding-top: 10px; background-color: white; color: black; line-height: 1.5;">`;
           let headerHtml = ``;
           if (b64College || b64University || b64Quality) {
@@ -344,6 +350,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                 <div style="text-align: center; flex: 1; padding: 0 15px;">
                   <h1 style="font-size: 22px; font-weight: bold; margin: 0 0 5px 0; color: black;">${form.title}</h1>
                   <p style="color: #6b7280; font-size: 13px; margin: 0;">رد #${ri + 1} | ${fmtDate(r.submittedAt)}</p>
+                  ${nameLabel}
                 </div>
                 <div style="width: 80px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
                   ${b64University ? `<img src="${b64University}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />` : ''}
@@ -355,6 +362,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               <div style="text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 20px;">
                 <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 10px 0; color: black;">${form.title}</h1>
                 <p style="color: #6b7280; font-size: 14px; margin: 0;">رد #${ri + 1} | التاريخ: ${fmtDate(r.submittedAt)}</p>
+                ${nameLabel}
               </div>`;
           }
 
@@ -409,12 +417,16 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             }
 
             const qEl = doc.createElement("div");
-            qEl.style.borderBottomWidth = "1px";
-            qEl.style.padding = "12px 16px";
-            qEl.style.marginBottom = "12px";
+            qEl.style.cssText = `border-bottom: 1px solid #f3f4f6; padding: 14px 20px; margin-bottom: 4px; background: ${qi % 2 === 0 ? '#fafbfc' : 'white'}; border-radius: 8px;`;
+            const categoryTag = q.minLabel ? `<span style="display: inline-block; font-size: 10px; background: #f3e8ff; color: #7c3aed; padding: 2px 8px; border-radius: 10px; margin-right: 8px;">${q.minLabel}</span>` : '';
             qEl.innerHTML = `
-                <h3 style="font-size: 15px; font-weight: 600; color: #1f2937; margin: 0 0 6px 0;">${qi + 1}. ${q.text}</h3>
-                <p style="font-size: 14px; color: #4b5563; margin: 0;">الرد: <strong style="color: #2563eb;">${ansText}</strong></p>
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eff6ff; color: #2563eb; font-size: 13px; font-weight: 700; flex-shrink: 0;">${qi + 1}</span>
+                  <div style="flex: 1;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #1f2937; margin: 0 0 6px 0;">${q.text}${categoryTag}</h3>
+                    <div style="display: inline-block; font-size: 13px; padding: 4px 14px; border-radius: 8px; ${ansText === '—' ? 'background: #f9fafb; color: #9ca3af;' : 'background: #eff6ff; color: #1e40af; font-weight: 500; border: 1px solid #dbeafe;'}">${ansText}</div>
+                  </div>
+                </div>
             `;
 
             currentPage.appendChild(qEl);
@@ -454,7 +466,8 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             pdf.addImage(imgData, "JPEG", 0, 0, 210, 297);
           }
 
-          zip.file(`response_${ri + 1}.pdf`, pdf.output("arraybuffer"));
+          const pdfFileName = studentName ? `${studentName}.pdf` : `response_${ri + 1}.pdf`;
+          zip.file(pdfFileName, pdf.output("arraybuffer"));
         }
         const blob = await zip.generateAsync({ type: "blob" });
         saveAs(blob, `${form.title}_PDFs.zip`);
@@ -529,6 +542,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       <div className="flex border-b border-gray-200">
         <button onClick={() => setActiveTab("edit")} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "edit" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Edit3 size={14} className="inline ml-1.5" />تعديل الأسئلة</button>
         <button onClick={() => setActiveTab("responses")} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "responses" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><BarChart2 size={14} className="inline ml-1.5" />التقرير والردود ({responses.length})</button>
+        <button onClick={() => { setActiveTab("individual"); setCurrentResponseIndex(0); }} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "individual" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}><Users size={14} className="inline ml-1.5" />ردود الطلاب</button>
       </div>
 
       {activeTab === "edit" && (
@@ -652,7 +666,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             <div className="bg-white rounded-xl border p-4 shadow-sm"><p className="text-3xl font-bold text-gray-900">{responses.length}</p><p className="text-xs text-gray-500">إجمالي الردود</p></div>
             <div className="bg-white rounded-xl border p-4 shadow-sm"><p className="text-3xl font-bold text-gray-900">{questions.length}</p><p className="text-xs text-gray-500">عدد الأسئلة</p></div>
             <div className="bg-white rounded-xl border p-4 shadow-sm"><p className="text-3xl font-bold text-gray-900">{responses.length > 0 ? fmtDate(responses[0].submittedAt) : "—"}</p><p className="text-xs text-gray-500">آخر رد</p></div>
-            <div className="bg-white rounded-xl border p-4 shadow-sm"><p className="text-3xl font-bold text-gray-900">{form.status === "active" ? "نشط" : "مسودة"}</p><p className="text-xs text-gray-500">حالة الاستبيان</p></div>
+            <div className="bg-white rounded-xl border p-4 shadow-sm"><p className="text-3xl font-bold text-gray-900">{form.status === "active" ? "نشط" : "مؤرشف"}</p><p className="text-xs text-gray-500">حالة الاستبيان</p></div>
           </div>
           <div className="flex gap-3 flex-wrap">
             <Button onClick={exportExcel} disabled={exporting || responses.length === 0} variant="outline" className="rounded-xl flex gap-2"><FileSpreadsheet size={16} className="text-green-600" />{exporting ? "جاري التصدير..." : "تصدير Excel"}</Button>
@@ -749,6 +763,97 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                     );
                   })}
                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "individual" && (
+        <div className="space-y-6">
+          {responses.length === 0 ? (
+            <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 py-16 text-center"><div className="text-5xl mb-4">📋</div><h3 className="text-lg font-semibold text-gray-700 mb-1">لا توجد ردود بعد</h3><p className="text-sm text-gray-400">شارك رابط الاستبيان لبدء جمع الردود</p></div>
+          ) : (
+            <div className="flex gap-6">
+              {/* Sidebar - response list */}
+              <div className="w-64 flex-shrink-0">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-6">
+                  <div className="px-4 py-3 bg-gradient-to-l from-blue-600 to-blue-700 text-white">
+                    <h3 className="text-sm font-bold">قائمة الردود</h3>
+                    <p className="text-xs text-blue-200 mt-0.5">{responses.length} رد</p>
+                  </div>
+                  <div className="divide-y divide-gray-50 max-h-[60vh] overflow-y-auto">
+                    {responses.map((r, ri) => {
+                      const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
+                      const nameA = nameQ ? answers.find(a => a.responseId === r.$id && a.questionId === nameQ.$id) : null;
+                      const name = nameA?.textValue || `رد #${ri + 1}`;
+                      return (
+                        <button key={r.$id} onClick={() => setCurrentResponseIndex(ri)} className={`w-full text-right px-4 py-3 text-sm transition-colors ${currentResponseIndex === ri ? "bg-blue-50 text-blue-700 font-semibold border-r-4 border-blue-500" : "text-gray-600 hover:bg-gray-50"}`}>
+                          <p className="truncate">{name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{fmtDate(r.submittedAt)}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Main content - current response */}
+              <div className="flex-1 min-w-0">
+                {(() => {
+                  const r = responses[currentResponseIndex];
+                  if (!r) return null;
+                  const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
+                  const nameA = nameQ ? answers.find(a => a.responseId === r.$id && a.questionId === nameQ.$id) : null;
+                  const studentName = nameA?.textValue || `طالب #${currentResponseIndex + 1}`;
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Navigation header */}
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">{studentName}</h2>
+                            <p className="text-sm text-gray-500 mt-0.5">رد #{currentResponseIndex + 1} من {responses.length} • {fmtDate(r.submittedAt)}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" disabled={currentResponseIndex === 0} onClick={() => setCurrentResponseIndex(i => i - 1)} className="rounded-xl h-9 w-9 p-0"><ChevronRight size={16}/></Button>
+                            <span className="text-sm font-medium text-gray-600 min-w-[60px] text-center">{currentResponseIndex + 1} / {responses.length}</span>
+                            <Button variant="outline" size="sm" disabled={currentResponseIndex === responses.length - 1} onClick={() => setCurrentResponseIndex(i => i + 1)} className="rounded-xl h-9 w-9 p-0"><ChevronLeft size={16}/></Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Answers */}
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="divide-y divide-gray-100">
+                          {questions.map((q, qi) => {
+                            const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
+                            let ansText = "—";
+                            if (a) {
+                              let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
+                              if (a.selectedOptions && a.selectedOptions.length) { ansText = a.selectedOptions.join("، "); }
+                              else if (valStr) {
+                                ansText = valStr;
+                                if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; }
+                              }
+                            }
+                            return (
+                              <div key={q.$id} className="px-6 py-4 flex items-start gap-4">
+                                <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">{qi + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-800 mb-1.5">{q.text}</p>
+                                  {q.minLabel && <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-md mb-1.5 inline-block">{q.minLabel}</span>}
+                                  <div className={`text-sm px-4 py-2 rounded-xl inline-block ${ansText === "—" ? "bg-gray-50 text-gray-400 italic" : "bg-gradient-to-l from-blue-50 to-indigo-50 text-blue-800 font-medium border border-blue-100"}`}>{ansText}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
