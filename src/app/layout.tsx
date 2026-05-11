@@ -6,7 +6,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 const cairo = Cairo({ subsets: ["latin", "arabic"] });
 
 export const metadata: Metadata = {
-  title: "AEMS - Assessment & Evaluation Management System",
+  title: "Measurement & Evaluation Committee",
   description: "Academic Evaluation and Survey Platform",
 };
 
