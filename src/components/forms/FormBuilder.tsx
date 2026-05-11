@@ -4,9 +4,9 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp } from "lucide-react";
 import { ID } from "appwrite";
-import { databases } from "@/lib/appwrite";
+import { databases, account } from "@/lib/appwrite";
 import { useAuth } from "@/hooks/useAuth";
-import { bulkImportAnswers } from "@/app/actions/import";
+import { createFormWithQuestions, importSingleResponse } from "@/app/actions/import";
 
 export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
 
@@ -52,6 +52,10 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   const [savedSlug, setSavedSlug] = useState("");
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
+  const [importStatus, setImportStatus] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
   const { user } = useAuth();
 
   const addQuestion = useCallback((type: QuestionType = "multiple_choice") => {
@@ -131,7 +135,10 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
       const maxDays = parseInt(daysStr, 10);
       if (isNaN(maxDays) || maxDays < 1) { alert("مدة غير صحيحة"); return; }
       
-      setSaving(true);
+      setIsImporting(true);
+      setImportProgress(0);
+      setImportStatus("جاري قراءة الملف...");
+      
       try {
         const XLSX = await import("xlsx");
         const data = await file.arrayBuffer();
@@ -143,90 +150,106 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         
         const headers = rows[0].map(h => String(h || "").trim());
         const dataRows = rows.slice(1).filter(r => r && r.length > 0);
+        const totalRows = dataRows.length;
+        setImportTotal(totalRows);
         
+        // Step 1: Create form and questions via Server Action (Admin SDK)
+        setImportStatus("جاري إنشاء الاستبيان والأسئلة...");
         const generatedTitle = file.name.replace(/\.[^/.]+$/, "");
         const slug = generatedTitle.replace(/\s+/g, "-").replace(/[^\u0621-\u064Aa-zA-Z0-9-]/g, "").substring(0, 50) + "-" + Date.now().toString(36);
-        const dbId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
         
-        // 1. Create Form
-        const newFormId = ID.unique();
-        await databases.createDocument(dbId, "forms", newFormId, {
-          title: generatedTitle,
-          description: "تم استيراده بالكامل من ملف إكسيل",
-          createdBy: user?.$id || "",
-          status: "active",
+        const formResult = await createFormWithQuestions(
+          generatedTitle,
+          "تم استيراده بالكامل من ملف إكسيل",
+          user?.$id || "",
           slug,
-          responsesCount: dataRows.length,
-          allowAnonymous: true,
-          preventDuplicate: false,
-          requireLogin: false,
-          createdAt: startDate.toISOString(),
-          updatedAt: startDate.toISOString(),
-        });
-
-        // 2. Create Questions
-        const questionIdMap = new Map();
-        for (let i = 0; i < headers.length; i++) {
-          if (!headers[i]) continue;
-          const qId = ID.unique();
-          await databases.createDocument(dbId, "questions", qId, {
-            formId: newFormId,
-            text: headers[i],
-            type: "likert",
-            options: [...LIKERT_OPTIONS],
-            required: true,
-            order: i,
-            minValue: null,
-            maxValue: null,
-            minLabel: null,
-            maxLabel: null,
-          });
-          questionIdMap.set(i, qId);
+          headers,
+          totalRows,
+          startDate.toISOString(),
+          [...LIKERT_OPTIONS]
+        );
+        
+        if (!formResult.success || !formResult.formId || !formResult.questionIdMap) {
+          throw new Error(formResult.error || "فشل في إنشاء الاستبيان");
         }
         
-        // 3. Create Responses and Answers using Server Action (with JWT for authorization)
-        const qMapObj = Object.fromEntries(questionIdMap);
-        const { jwt } = await account.createJWT();
+        const newFormId = formResult.formId;
+        const questionIdMap = formResult.questionIdMap;
         
-        const chunkSize = 5; // Smaller chunks to avoid server timeouts
-        for (let i = 0; i < dataRows.length; i += chunkSize) {
-          const chunkData = dataRows.slice(i, i + chunkSize);
+        // Step 2: Import responses one by one via Server Action
+        setImportStatus(`جاري استيراد الردود (0 / ${totalRows})...`);
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (let i = 0; i < totalRows; i++) {
+          const row = dataRows[i];
           
-          const runWithRetry = async () => {
-            for (let attempt = 0; attempt < 3; attempt++) {
-              try {
-                const res = await bulkImportAnswers(
-                  newFormId,
-                  headers,
-                  chunkData,
-                  qMapObj,
-                  startDate.toISOString(),
-                  maxDays,
-                  jwt
-                );
-                if (res.success) return true;
-                if (res.error?.includes("Rate limit")) {
-                  await new Promise(r => setTimeout(r, 5000)); // Wait 5s on rate limit
-                } else {
-                  throw new Error(res.error);
-                }
-              } catch (e: any) {
-                if (attempt === 2) throw e;
-                await new Promise(r => setTimeout(r, 2000));
-              }
+          // Generate random submit date
+          const randomDays = Math.floor(Math.random() * maxDays);
+          const randomHours = Math.floor(Math.random() * 24);
+          const randomMinutes = Math.floor(Math.random() * 60);
+          const submitDate = new Date(startDate);
+          submitDate.setDate(submitDate.getDate() + randomDays);
+          submitDate.setHours(randomHours, randomMinutes, 0, 0);
+          
+          // Try importing this row with retries
+          let rowSuccess = false;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const res = await importSingleResponse(
+              newFormId,
+              headers,
+              row,
+              questionIdMap,
+              submitDate.toISOString()
+            );
+            
+            if (res.success) {
+              rowSuccess = true;
+              break;
             }
-          };
+            
+            // If rate limited, wait with exponential backoff
+            if (res.error?.includes("Rate limit")) {
+              const waitTime = Math.pow(2, attempt + 1) * 2000; // 4s, 8s, 16s, 32s, 64s
+              setImportStatus(`⏳ تم تجاوز الحد - انتظار ${waitTime/1000} ثانية... (${i + 1} / ${totalRows})`);
+              await new Promise(r => setTimeout(r, waitTime));
+            } else {
+              // Other error, wait 2s and retry
+              await new Promise(r => setTimeout(r, 2000));
+            }
+          }
           
-          await runWithRetry();
+          if (rowSuccess) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+          
+          setImportProgress(i + 1);
+          setImportStatus(`جاري استيراد الردود (${i + 1} / ${totalRows})...`);
+          
+          // Delay between rows to respect rate limits (500ms between each row)
+          if (i < totalRows - 1) {
+            await new Promise(r => setTimeout(r, 500));
+          }
         }
         
-        alert("تم استيراد الاستبيان بجميع الردود بنجاح!");
+        setImportStatus("✅ تم الاستيراد بنجاح!");
+        
+        const msg = failCount > 0
+          ? `تم استيراد ${successCount} رد بنجاح، وفشل ${failCount} رد.`
+          : `تم استيراد جميع الردود (${successCount}) بنجاح! 🎉`;
+        
+        alert(msg);
         window.location.href = `/dashboard/forms/${newFormId}`;
       } catch (error: any) {
         console.error(error);
         alert("حدث خطأ أثناء الاستيراد: " + (error?.message || "يرجى المحاولة مرة أخرى"));
       } finally {
-        setSaving(false);
+        setIsImporting(false);
+        setImportProgress(0);
+        setImportTotal(0);
+        setImportStatus("");
       }
     };
     input.click();
@@ -395,6 +418,38 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-28">
+      {/* Import Progress Overlay */}
+      {isImporting && (
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 w-[90%] max-w-md mx-auto text-center" dir="rtl">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <svg className="w-8 h-8 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">جاري الاستيراد</h3>
+            <p className="text-sm text-gray-500 mb-6">{importStatus}</p>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-100 rounded-full h-4 mb-3 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-l from-blue-500 to-indigo-600 transition-all duration-500 ease-out"
+                style={{ width: importTotal > 0 ? `${Math.round((importProgress / importTotal) * 100)}%` : '0%' }}
+              />
+            </div>
+            
+            <div className="flex justify-between text-xs text-gray-400 mb-4">
+              <span>{importTotal > 0 ? `${Math.round((importProgress / importTotal) * 100)}%` : '0%'}</span>
+              <span>{importProgress} / {importTotal} رد</span>
+            </div>
+            
+            <p className="text-xs text-gray-400">
+              لا تغلق هذه الصفحة حتى يكتمل الاستيراد
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Form Header Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
