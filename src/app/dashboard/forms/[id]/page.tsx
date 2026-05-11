@@ -466,8 +466,21 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   };
 
   const getAnalytics = () => {
+    // Build a set of valid response IDs to filter out orphaned answers
+    const validResponseIds = new Set(responses.map(r => r.$id));
+    // Filter answers to only those belonging to existing responses
+    const validAnswers = answers.filter(a => validResponseIds.has(a.responseId));
+
     return questions.map(q => {
-      const qAnswers = answers.filter(a => a.questionId === q.$id);
+      // Get answers for this question, deduplicated by responseId (keep first per response)
+      const allQAnswers = validAnswers.filter(a => a.questionId === q.$id);
+      const seen = new Set<string>();
+      const qAnswers = allQAnswers.filter(a => {
+        if (seen.has(a.responseId)) return false;
+        seen.add(a.responseId);
+        return true;
+      });
+
       if (["multiple_choice", "checkbox", "dropdown", "likert", "yes_no"].includes(q.type)) {
         const counts: Record<string, number> = {};
         q.options.forEach(o => { counts[o] = 0; });
