@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { databases } from "@/lib/appwrite";
 import { Query, ID } from "appwrite";
+import { loadFormBySlug, submitFormResponse } from "@/app/actions/forms";
 
 interface Question {
   $id: string;
@@ -42,27 +42,16 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
 
   const loadForm = async () => {
     try {
-      const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
-      // Find form by slug
-      const decodedSlug = decodeURIComponent(params.slug);
-      const formsRes = await databases.listDocuments(db, "forms", [
-        Query.equal("slug", decodedSlug),
-        Query.limit(1),
-      ]);
-
-      if (formsRes.documents.length === 0) {
-        setError("not_found");
+      // Use Server Action to bypass CORS - works on ALL devices
+      const result = await loadFormBySlug(params.slug);
+      
+      if (!result.success) {
+        setError(result.error || "error");
         setLoading(false);
         return;
       }
 
-      const formDoc = formsRes.documents[0] as unknown as FormData;
-
-      if (formDoc.status !== "active") {
-        setError("closed");
-        setLoading(false);
-        return;
-      }
+      const formDoc = result.form as FormData;
 
       if (formDoc.description?.includes("[single_response]")) {
         if (localStorage.getItem(`submitted_${formDoc.$id}`)) {
@@ -73,14 +62,7 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
       }
 
       setForm(formDoc);
-
-      // Load questions
-      const questionsRes = await databases.listDocuments(db, "questions", [
-        Query.equal("formId", formDoc.$id),
-        Query.orderAsc("order"),
-        Query.limit(100),
-      ]);
-      setQuestions(questionsRes.documents as unknown as Question[]);
+      setQuestions(result.questions as Question[]);
     } catch (err) {
       console.error(err);
       setError("error");
@@ -118,43 +100,28 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
     if (!validate() || !form) return;
     setSubmitting(true);
     try {
-      const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
+      // Build answers array for server action
+      const answersData: { questionId: string; textValue: string; numberValue?: number | null }[] = [];
       
-      // Create response
-      const response = await databases.createDocument(db, "responses", ID.unique(), {
-        formId: form.$id,
-        submittedAt: new Date().toISOString(),
-      });
-
-      // Create answers
       for (const q of questions) {
         const a = answers[q.$id];
         if (a === undefined || a === null) continue;
 
-        const answerData: Record<string, unknown> = {
-          responseId: response.$id,
-          questionId: q.$id,
-          formId: form.$id,
-        };
-
         if (typeof a === "number") {
-          answerData.numberValue = a;
+          answersData.push({ questionId: q.$id, textValue: String(a), numberValue: a });
         } else if (typeof a === "string") {
-          answerData.textValue = a;
+          answersData.push({ questionId: q.$id, textValue: a });
         } else if (Array.isArray(a)) {
-          answerData.selectedOptions = a;
+          answersData.push({ questionId: q.$id, textValue: a.join(", ") });
         }
-
-        await databases.createDocument(db, "response_answers", ID.unique(), answerData);
       }
 
-      // Update response count
-      try {
-        const currentForm = await databases.getDocument(db, "forms", form.$id);
-        await databases.updateDocument(db, "forms", form.$id, {
-          responsesCount: ((currentForm as any).responsesCount || 0) + 1,
-        });
-      } catch {}
+      // Use Server Action to submit - bypasses CORS
+      const result = await submitFormResponse(form.$id, answersData);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
       if (form.description?.includes("[single_response]")) {
         localStorage.setItem(`submitted_${form.$id}`, "true");
