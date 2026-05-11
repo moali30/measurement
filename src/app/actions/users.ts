@@ -1,6 +1,8 @@
 "use server";
 import { Client, Users, ID } from 'node-appwrite';
 
+import { config } from '@/lib/config';
+
 export async function createUser(data: FormData) {
   const name = data.get("name") as string;
   const email = data.get("email") as string;
@@ -8,8 +10,8 @@ export async function createUser(data: FormData) {
 
   try {
     const client = new Client()
-      .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-      .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '')
+      .setEndpoint(config.appwriteUrl)
+      .setProject(config.projectId)
       .setKey(process.env.APPWRITE_API_KEY || '');
 
     const users = new Users(client);
@@ -24,8 +26,8 @@ export async function createUser(data: FormData) {
 export async function listUsers() {
   try {
     const client = new Client()
-      .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-      .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '')
+      .setEndpoint(config.appwriteUrl)
+      .setProject(config.projectId)
       .setKey(process.env.APPWRITE_API_KEY || '');
 
     const users = new Users(client);

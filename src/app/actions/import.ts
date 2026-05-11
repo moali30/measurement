@@ -1,6 +1,8 @@
 "use server";
 import { Client, Databases, ID } from 'node-appwrite';
 
+import { config } from '@/lib/config';
+
 export async function bulkImportAnswers(
   formId: string, 
   headers: string[], 
@@ -11,12 +13,12 @@ export async function bulkImportAnswers(
 ) {
   try {
     const client = new Client()
-      .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-      .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '')
+      .setEndpoint(config.appwriteUrl)
+      .setProject(config.projectId)
       .setKey(process.env.APPWRITE_API_KEY || '');
 
     const databases = new Databases(client);
-    const dbId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
+    const dbId = config.databaseId;
     const startDate = new Date(startDateIso);
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -64,12 +66,12 @@ export async function bulkImportAnswers(
 export async function bulkAddAnswers(formId: string, questionId: string, answersList: { responseId: string, textValue: string }[]) {
   try {
     const client = new Client()
-      .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-      .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '')
+      .setEndpoint(config.appwriteUrl)
+      .setProject(config.projectId)
       .setKey(process.env.APPWRITE_API_KEY || '');
 
     const databases = new Databases(client);
-    const dbId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
+    const dbId = config.databaseId;
 
     const promises = answersList.map(a => databases.createDocument(dbId, "response_answers", ID.unique(), {
       formId,
