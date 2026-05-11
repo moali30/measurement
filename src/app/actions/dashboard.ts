@@ -22,7 +22,7 @@ export async function listFormsServer() {
     
     const r = await databases.listDocuments(dbId, "forms", [
       Query.orderDesc("$createdAt"),
-      Query.limit(50),
+      Query.limit(500),
     ]);
     
     return {
