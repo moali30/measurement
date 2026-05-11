@@ -6,7 +6,7 @@ import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleL
 import { ID } from "appwrite";
 import { databases, account } from "@/lib/appwrite";
 import { useAuth } from "@/hooks/useAuth";
-import { createFormWithQuestions, importSingleResponse } from "@/app/actions/import";
+import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
 
 export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
 
@@ -176,71 +176,50 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         const newFormId = formResult.formId;
         const questionIdMap = formResult.questionIdMap;
         
-        // Step 2: Import responses one by one via Server Action
-        setImportStatus(`جاري استيراد الردود (0 / ${totalRows})...`);
-        let successCount = 0;
-        let failCount = 0;
+        // Step 2: Import responses in FAST batches via Server Action (Admin SDK)
+        const BATCH_SIZE = 10; // 10 rows per server call
+        const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
+        setImportStatus(`جاري استيراد الردود بسرعة (0 / ${totalRows})...`);
+        let processedRows = 0;
         
-        for (let i = 0; i < totalRows; i++) {
-          const row = dataRows[i];
+        for (let b = 0; b < totalBatches; b++) {
+          const batchStart = b * BATCH_SIZE;
+          const batchData = dataRows.slice(batchStart, batchStart + BATCH_SIZE);
           
-          // Generate random submit date
-          const randomDays = Math.floor(Math.random() * maxDays);
-          const randomHours = Math.floor(Math.random() * 24);
-          const randomMinutes = Math.floor(Math.random() * 60);
-          const submitDate = new Date(startDate);
-          submitDate.setDate(submitDate.getDate() + randomDays);
-          submitDate.setHours(randomHours, randomMinutes, 0, 0);
-          
-          // Try importing this row with retries
-          let rowSuccess = false;
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const res = await importSingleResponse(
+          // Retry logic for each batch
+          let batchSuccess = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await importBatchResponses(
               newFormId,
               headers,
-              row,
+              batchData,
               questionIdMap,
-              submitDate.toISOString()
+              startDate.toISOString(),
+              maxDays
             );
             
             if (res.success) {
-              rowSuccess = true;
+              batchSuccess = true;
               break;
             }
             
-            // If rate limited, wait with exponential backoff
             if (res.error?.includes("Rate limit")) {
-              const waitTime = Math.pow(2, attempt + 1) * 2000; // 4s, 8s, 16s, 32s, 64s
-              setImportStatus(`⏳ تم تجاوز الحد - انتظار ${waitTime/1000} ثانية... (${i + 1} / ${totalRows})`);
+              const waitTime = Math.pow(2, attempt + 1) * 3000;
+              setImportStatus(`⏳ انتظار ${waitTime/1000} ثانية... (${processedRows} / ${totalRows})`);
               await new Promise(r => setTimeout(r, waitTime));
             } else {
-              // Other error, wait 2s and retry
-              await new Promise(r => setTimeout(r, 2000));
+              // Other error, short wait and retry
+              await new Promise(r => setTimeout(r, 1000));
             }
           }
           
-          if (rowSuccess) {
-            successCount++;
-          } else {
-            failCount++;
-          }
-          
-          setImportProgress(i + 1);
-          setImportStatus(`جاري استيراد الردود (${i + 1} / ${totalRows})...`);
-          
-          // Delay between rows to respect rate limits (500ms between each row)
-          if (i < totalRows - 1) {
-            await new Promise(r => setTimeout(r, 500));
-          }
+          processedRows += batchData.length;
+          setImportProgress(processedRows);
+          setImportStatus(`جاري استيراد الردود (${processedRows} / ${totalRows})...`);
         }
         
         setImportStatus("✅ تم الاستيراد بنجاح!");
-        
-        const msg = failCount > 0
-          ? `تم استيراد ${successCount} رد بنجاح، وفشل ${failCount} رد.`
-          : `تم استيراد جميع الردود (${successCount}) بنجاح! 🎉`;
-        
-        alert(msg);
+        alert(`تم استيراد جميع الردود (${totalRows}) بنجاح! 🎉`);
         window.location.href = `/dashboard/forms/${newFormId}`;
       } catch (error: any) {
         console.error(error);

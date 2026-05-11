@@ -11,82 +11,8 @@ function getAdminClient() {
     .setKey(API_KEY);
 }
 
-function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 5): Promise<T> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (e: any) {
-      const isRateLimit = e?.code === 429 || e?.message?.includes('Rate limit');
-      if (isRateLimit && attempt < maxAttempts - 1) {
-        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
-        const waitTime = Math.pow(2, attempt + 1) * 1000;
-        await delay(waitTime);
-      } else if (attempt < maxAttempts - 1) {
-        await delay(1000);
-      } else {
-        throw e;
-      }
-    }
-  }
-  throw new Error('Max retry attempts reached');
-}
-
-/**
- * Import a single response row with all its answers.
- * Called one row at a time from the client to allow progress tracking.
- */
-export async function importSingleResponse(
-  formId: string,
-  headers: string[],
-  rowData: any[],
-  questionIdMap: Record<string, string>,
-  submitDateIso: string
-) {
-  try {
-    const databases = new Databases(getAdminClient());
-    const dbId = config.databaseId;
-
-    // 1. Create the response document
-    const responseId = ID.unique();
-    await withRetry(() =>
-      databases.createDocument(dbId, "responses", responseId, {
-        formId,
-        submittedAt: submitDateIso,
-      })
-    );
-
-    // 2. Create answer documents one by one with delay
-    for (let j = 0; j < headers.length; j++) {
-      if (!headers[j]) continue;
-      const val = rowData[j];
-      if (val !== undefined && val !== null && val !== "") {
-        await withRetry(() =>
-          databases.createDocument(dbId, "response_answers", ID.unique(), {
-            formId,
-            responseId,
-            questionId: questionIdMap[j],
-            numberValue: !isNaN(Number(val)) ? Number(val) : null,
-            textValue: String(val),
-          })
-        );
-        // Small delay between each answer to avoid rate limits
-        await delay(100);
-      }
-    }
-
-    return { success: true, responseId };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
 /**
  * Create the form and questions in Appwrite.
- * Returns the form ID and question ID map.
  */
 export async function createFormWithQuestions(
   title: string,
@@ -104,44 +30,40 @@ export async function createFormWithQuestions(
 
     // Create form
     const newFormId = ID.unique();
-    await withRetry(() =>
-      databases.createDocument(dbId, "forms", newFormId, {
-        title,
-        description,
-        createdBy,
-        status: "active",
-        slug,
-        responsesCount: totalResponses,
-        allowAnonymous: true,
-        preventDuplicate: false,
-        requireLogin: false,
-        createdAt: startDateIso,
-        updatedAt: startDateIso,
-      })
-    );
+    await databases.createDocument(dbId, "forms", newFormId, {
+      title,
+      description,
+      createdBy,
+      status: "active",
+      slug,
+      responsesCount: totalResponses,
+      allowAnonymous: true,
+      preventDuplicate: false,
+      requireLogin: false,
+      createdAt: startDateIso,
+      updatedAt: startDateIso,
+    });
 
-    // Create questions
+    // Create questions in parallel (small batch)
     const questionIdMap: Record<string, string> = {};
-    for (let i = 0; i < headers.length; i++) {
-      if (!headers[i]) continue;
+    const qPromises = headers.map((header, i) => {
+      if (!header) return Promise.resolve();
       const qId = ID.unique();
-      await withRetry(() =>
-        databases.createDocument(dbId, "questions", qId, {
-          formId: newFormId,
-          text: headers[i],
-          type: "likert",
-          options: questionOptions,
-          required: true,
-          order: i,
-          minValue: null,
-          maxValue: null,
-          minLabel: null,
-          maxLabel: null,
-        })
-      );
       questionIdMap[String(i)] = qId;
-      await delay(200);
-    }
+      return databases.createDocument(dbId, "questions", qId, {
+        formId: newFormId,
+        text: header,
+        type: "likert",
+        options: questionOptions,
+        required: true,
+        order: i,
+        minValue: null,
+        maxValue: null,
+        minLabel: null,
+        maxLabel: null,
+      });
+    });
+    await Promise.all(qPromises);
 
     return { success: true, formId: newFormId, questionIdMap };
   } catch (error: any) {
@@ -149,7 +71,70 @@ export async function createFormWithQuestions(
   }
 }
 
-// Keep legacy functions for backward compatibility
+/**
+ * FAST batch import: processes multiple rows at once using Admin SDK.
+ * Admin API key bypasses per-user rate limits.
+ */
+export async function importBatchResponses(
+  formId: string,
+  headers: string[],
+  dataRows: any[][],
+  questionIdMap: Record<string, string>,
+  startDateIso: string,
+  maxDays: number
+) {
+  try {
+    const databases = new Databases(getAdminClient());
+    const dbId = config.databaseId;
+    const startDate = new Date(startDateIso);
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+
+      // Random submit date
+      const randomDays = Math.floor(Math.random() * maxDays);
+      const randomHours = Math.floor(Math.random() * 24);
+      const randomMinutes = Math.floor(Math.random() * 60);
+      const submitDate = new Date(startDate);
+      submitDate.setDate(submitDate.getDate() + randomDays);
+      submitDate.setHours(randomHours, randomMinutes, 0, 0);
+
+      // Create response
+      const responseId = ID.unique();
+      await databases.createDocument(dbId, "responses", responseId, {
+        formId,
+        submittedAt: submitDate.toISOString(),
+      });
+
+      // Create ALL answers for this row in parallel (fast!)
+      const answerPromises: Promise<any>[] = [];
+      for (let j = 0; j < headers.length; j++) {
+        if (!headers[j]) continue;
+        const val = row[j];
+        if (val !== undefined && val !== null && val !== "") {
+          answerPromises.push(
+            databases.createDocument(dbId, "response_answers", ID.unique(), {
+              formId,
+              responseId,
+              questionId: questionIdMap[String(j)],
+              numberValue: !isNaN(Number(val)) ? Number(val) : null,
+              textValue: String(val),
+            })
+          );
+        }
+      }
+
+      // Execute all answers for this row at once
+      await Promise.all(answerPromises);
+    }
+
+    return { success: true, count: dataRows.length };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Legacy compatibility
 export async function bulkImportAnswers(
   formId: string,
   headers: string[],
@@ -159,60 +144,7 @@ export async function bulkImportAnswers(
   maxDays: number,
   jwt?: string
 ) {
-  try {
-    const client = new Client()
-      .setEndpoint(config.appwriteUrl)
-      .setProject(config.projectId);
-
-    if (jwt) {
-      client.setJWT(jwt);
-    } else {
-      client.setKey(API_KEY);
-    }
-
-    const databases = new Databases(client);
-    const dbId = config.databaseId;
-    const startDate = new Date(startDateIso);
-
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      const randomDays = Math.floor(Math.random() * maxDays);
-      const randomHours = Math.floor(Math.random() * 24);
-      const randomMinutes = Math.floor(Math.random() * 60);
-      const submitDate = new Date(startDate);
-      submitDate.setDate(submitDate.getDate() + randomDays);
-      submitDate.setHours(randomHours, randomMinutes, 0, 0);
-
-      const responseId = ID.unique();
-      await withRetry(() =>
-        databases.createDocument(dbId, "responses", responseId, {
-          formId: formId,
-          submittedAt: submitDate.toISOString(),
-        })
-      );
-
-      for (let j = 0; j < headers.length; j++) {
-        if (!headers[j]) continue;
-        const val = row[j];
-        if (val !== undefined && val !== null && val !== "") {
-          await withRetry(() =>
-            databases.createDocument(dbId, "response_answers", ID.unique(), {
-              formId: formId,
-              responseId: responseId,
-              questionId: questionIdMap[j],
-              numberValue: !isNaN(Number(val)) ? Number(val) : null,
-              textValue: String(val),
-            })
-          );
-          await delay(100);
-        }
-      }
-      await delay(300);
-    }
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
+  return importBatchResponses(formId, headers, dataRows, questionIdMap, startDateIso, maxDays);
 }
 
 export async function bulkAddAnswers(
@@ -224,19 +156,27 @@ export async function bulkAddAnswers(
     const databases = new Databases(getAdminClient());
     const dbId = config.databaseId;
 
-    for (const a of answersList) {
-      await withRetry(() =>
-        databases.createDocument(dbId, "response_answers", ID.unique(), {
-          formId,
-          responseId: a.responseId,
-          questionId,
-          textValue: a.textValue,
-        })
-      );
-      await delay(100);
-    }
+    const promises = answersList.map(a =>
+      databases.createDocument(dbId, "response_answers", ID.unique(), {
+        formId,
+        responseId: a.responseId,
+        questionId,
+        textValue: a.textValue,
+      })
+    );
+    await Promise.all(promises);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+export async function importSingleResponse(
+  formId: string,
+  headers: string[],
+  rowData: any[],
+  questionIdMap: Record<string, string>,
+  submitDateIso: string
+) {
+  return importBatchResponses(formId, headers, [rowData], questionIdMap, submitDateIso, 0);
 }
