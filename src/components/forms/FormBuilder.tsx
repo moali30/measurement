@@ -184,20 +184,50 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
           questionIdMap.set(i, qId);
         }
         
-        // 3. Create Responses and Answers using Server Action (bypass rate limits)
+        // 3. Create Responses and Answers using Client SDK directly to avoid Server Action permission issues
         const qMapObj = Object.fromEntries(questionIdMap);
-        const chunkSize = 20;
-        for (let i = 0; i < dataRows.length; i += chunkSize) {
-          const chunkData = dataRows.slice(i, i + chunkSize);
-          const res = await bulkImportAnswers(
-            newFormId,
-            headers,
-            chunkData,
-            qMapObj,
-            startDate.toISOString(),
-            maxDays
-          );
-          if (!res.success) throw new Error(res.error);
+        
+        const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => {
+           for(let attempt=0; attempt<5; attempt++) {
+              try { return await fn(); }
+              catch(e: any) {
+                 if(e.code === 429) {
+                    await new Promise(r => setTimeout(r, 2000));
+                 } else throw e;
+              }
+           }
+           return await fn();
+        };
+
+        for (let i = 0; i < dataRows.length; i++) {
+          const row = dataRows[i];
+          const randomDays = Math.floor(Math.random() * maxDays);
+          const randomHours = Math.floor(Math.random() * 24);
+          const randomMinutes = Math.floor(Math.random() * 60);
+          const submitDate = new Date(startDate);
+          submitDate.setDate(submitDate.getDate() + randomDays);
+          submitDate.setHours(randomHours, randomMinutes, 0, 0);
+          
+          const responseId = ID.unique();
+          await withRetry(() => databases.createDocument(dbId, "responses", responseId, {
+            formId: newFormId,
+            submittedAt: submitDate.toISOString(),
+          }));
+          
+          for (let j = 0; j < headers.length; j++) {
+            if (!headers[j]) continue;
+            const val = row[j];
+            if (val !== undefined && val !== null && val !== "") {
+              await withRetry(() => databases.createDocument(dbId, "response_answers", ID.unique(), {
+                formId: newFormId,
+                responseId: responseId,
+                questionId: qMapObj[j],
+                numberValue: !isNaN(Number(val)) ? Number(val) : null,
+                textValue: String(val)
+              }));
+              await new Promise(r => setTimeout(r, 20)); // Small delay to prevent hitting Appwrite rate limits
+            }
+          }
         }
         
         alert("تم استيراد الاستبيان بجميع الردود بنجاح!");
