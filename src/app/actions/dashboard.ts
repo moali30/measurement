@@ -162,3 +162,64 @@ export async function createAnswerServer(formId: string, responseId: string, que
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Create a new form with questions - server-side.
+ */
+export async function createFormServer(
+  formData: {
+    title: string;
+    description: string;
+    createdBy: string;
+    slug: string;
+  },
+  questionsData: {
+    text: string;
+    type: string;
+    options: string[];
+    required: boolean;
+    order: number;
+    minValue?: number | null;
+    maxValue?: number | null;
+    minLabel?: string | null;
+    maxLabel?: string | null;
+  }[]
+) {
+  try {
+    const databases = new Databases(getAdminClient());
+    const dbId = config.databaseId;
+
+    const formDoc = await databases.createDocument(dbId, "forms", ID.unique(), {
+      title: formData.title,
+      description: formData.description,
+      createdBy: formData.createdBy,
+      status: "draft",
+      slug: formData.slug,
+      responsesCount: 0,
+      allowAnonymous: true,
+      preventDuplicate: false,
+      requireLogin: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    for (const q of questionsData) {
+      await databases.createDocument(dbId, "questions", ID.unique(), {
+        formId: formDoc.$id,
+        text: q.text,
+        type: q.type,
+        options: q.options,
+        required: q.required,
+        order: q.order,
+        minValue: q.minValue ?? null,
+        maxValue: q.maxValue ?? null,
+        minLabel: q.minLabel ?? null,
+        maxLabel: q.maxLabel ?? null,
+      });
+    }
+
+    return { success: true, formId: formDoc.$id, slug: formData.slug };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

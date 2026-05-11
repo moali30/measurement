@@ -4,9 +4,9 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp } from "lucide-react";
 import { ID } from "appwrite";
-import { databases, account } from "@/lib/appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
+import { createFormServer } from "@/app/actions/dashboard";
 
 export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
 
@@ -240,26 +240,16 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
     setSaving(true);
     try {
       const slug = title.replace(/\s+/g, "-").replace(/[^\u0621-\u064Aa-zA-Z0-9-]/g, "").substring(0, 50) + "-" + Date.now().toString(36);
-      const dbId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
       
-      const formDoc = await databases.createDocument(dbId, "forms", formId || ID.unique(), {
-        title,
-        description,
-        createdBy: user?.$id || "",
-        status: "draft",
-        slug,
-        responsesCount: 0,
-        allowAnonymous: true,
-        preventDuplicate: false,
-        requireLogin: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
-        await databases.createDocument(dbId, "questions", ID.unique(), {
-          formId: formDoc.$id,
+      // Server Action - no direct Appwrite connection!
+      const result = await createFormServer(
+        {
+          title,
+          description,
+          createdBy: user?.$id || "",
+          slug,
+        },
+        questions.map((q, i) => ({
           text: q.text,
           type: q.type,
           options: q.options,
@@ -269,15 +259,19 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
           maxValue: q.maxValue ?? null,
           minLabel: q.minLabel ?? null,
           maxLabel: q.maxLabel ?? null,
-        });
+        }))
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || "فشل في إنشاء الاستبيان");
       }
 
       setSaved(true);
       setSavedSlug(slug);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("حدث خطأ أثناء الحفظ");
+      alert("حدث خطأ أثناء الحفظ: " + (err?.message || ""));
     } finally {
       setSaving(false);
     }
