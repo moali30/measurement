@@ -160,7 +160,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         
         const formResult = await createFormWithQuestions(
           generatedTitle,
-          "تم استيراده بالكامل من ملف إكسيل",
+          "",
           user?.$id || "",
           slug,
           headers,
