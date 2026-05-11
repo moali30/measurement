@@ -9,13 +9,19 @@ export async function bulkImportAnswers(
   dataRows: any[][], 
   questionIdMap: Record<string, string>,
   startDateIso: string,
-  maxDays: number
+  maxDays: number,
+  jwt?: string
 ) {
   try {
     const client = new Client()
       .setEndpoint(config.appwriteUrl)
-      .setProject(config.projectId)
-      .setKey(process.env.APPWRITE_API_KEY || '');
+      .setProject(config.projectId);
+    
+    if (jwt) {
+      client.setJWT(jwt);
+    } else {
+      client.setKey(process.env.APPWRITE_API_KEY || '');
+    }
 
     const databases = new Databases(client);
     const dbId = config.databaseId;

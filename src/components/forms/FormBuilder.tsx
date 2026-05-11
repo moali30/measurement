@@ -184,50 +184,40 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
           questionIdMap.set(i, qId);
         }
         
-        // 3. Create Responses and Answers using Client SDK directly to avoid Server Action permission issues
+        // 3. Create Responses and Answers using Server Action (with JWT for authorization)
         const qMapObj = Object.fromEntries(questionIdMap);
+        const { jwt } = await account.createJWT();
         
-        const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => {
-           for(let attempt=0; attempt<5; attempt++) {
-              try { return await fn(); }
-              catch(e: any) {
-                 if(e.code === 429) {
-                    await new Promise(r => setTimeout(r, 2000));
-                 } else throw e;
+        const chunkSize = 5; // Smaller chunks to avoid server timeouts
+        for (let i = 0; i < dataRows.length; i += chunkSize) {
+          const chunkData = dataRows.slice(i, i + chunkSize);
+          
+          const runWithRetry = async () => {
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                const res = await bulkImportAnswers(
+                  newFormId,
+                  headers,
+                  chunkData,
+                  qMapObj,
+                  startDate.toISOString(),
+                  maxDays,
+                  jwt
+                );
+                if (res.success) return true;
+                if (res.error?.includes("Rate limit")) {
+                  await new Promise(r => setTimeout(r, 5000)); // Wait 5s on rate limit
+                } else {
+                  throw new Error(res.error);
+                }
+              } catch (e: any) {
+                if (attempt === 2) throw e;
+                await new Promise(r => setTimeout(r, 2000));
               }
-           }
-           return await fn();
-        };
-
-        for (let i = 0; i < dataRows.length; i++) {
-          const row = dataRows[i];
-          const randomDays = Math.floor(Math.random() * maxDays);
-          const randomHours = Math.floor(Math.random() * 24);
-          const randomMinutes = Math.floor(Math.random() * 60);
-          const submitDate = new Date(startDate);
-          submitDate.setDate(submitDate.getDate() + randomDays);
-          submitDate.setHours(randomHours, randomMinutes, 0, 0);
-          
-          const responseId = ID.unique();
-          await withRetry(() => databases.createDocument(dbId, "responses", responseId, {
-            formId: newFormId,
-            submittedAt: submitDate.toISOString(),
-          }));
-          
-          for (let j = 0; j < headers.length; j++) {
-            if (!headers[j]) continue;
-            const val = row[j];
-            if (val !== undefined && val !== null && val !== "") {
-              await withRetry(() => databases.createDocument(dbId, "response_answers", ID.unique(), {
-                formId: newFormId,
-                responseId: responseId,
-                questionId: qMapObj[j],
-                numberValue: !isNaN(Number(val)) ? Number(val) : null,
-                textValue: String(val)
-              }));
-              await new Promise(r => setTimeout(r, 20)); // Small delay to prevent hitting Appwrite rate limits
             }
-          }
+          };
+          
+          await runWithRetry();
         }
         
         alert("تم استيراد الاستبيان بجميع الردود بنجاح!");
