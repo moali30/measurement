@@ -57,7 +57,6 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   const [importTotal, setImportTotal] = useState(0);
   const [importStatus, setImportStatus] = useState("");
   const [isImporting, setIsImporting] = useState(false);
-  const { user } = useAuth();
 
   const addQuestion = useCallback((type: QuestionType = "multiple_choice") => {
     const defaults: Partial<Question> = {};
