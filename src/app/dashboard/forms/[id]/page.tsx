@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { databases, storage } from "@/lib/appwrite";
-import { Query, ID } from "appwrite";
+import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
+import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer } from "@/app/actions/dashboard";
 
 interface FormData { $id: string; title: string; description: string; status: string; slug: string; responsesCount: number; createdAt: string; collegeLogo?: string; universityLogo?: string; qualityLogo?: string; }
 interface Question { $id: string; text: string; type: string; options: string[]; required: boolean; order: number; minLabel?: string; maxLabel?: string; minValue?: number; maxValue?: number; }
@@ -30,8 +30,6 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [printingPdf, setPrintingPdf] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
 
-  const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
-
   // Helper functions moved to top
   const fmtDate = (d: string) => { 
     try { 
@@ -44,19 +42,15 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const f = await databases.getDocument(db, "forms", params.id) as unknown as FormData;
-      setForm(f);
-      const qs = await databases.listDocuments(db, "questions", [Query.equal("formId", params.id), Query.orderAsc("order"), Query.limit(100)]);
-      setQuestions(qs.documents as unknown as Question[]);
-      
-      const uniqueCats = Array.from(new Set(qs.documents.map((q: any) => q.minLabel).filter(Boolean))) as string[];
-      setCategories(uniqueCats);
-
-      const rs = await databases.listDocuments(db, "responses", [Query.equal("formId", params.id), Query.orderDesc("submittedAt"), Query.limit(500)]);
-      setResponses(rs.documents as unknown as Response[]);
-      if (rs.documents.length > 0) {
-        const ans = await databases.listDocuments(db, "response_answers", [Query.equal("formId", params.id), Query.limit(5000)]);
-        setAnswers(ans.documents as unknown as Answer[]);
+      // Server Action - no direct Appwrite connection!
+      const result = await loadFormDetailServer(params.id);
+      if (result.success) {
+        setForm(result.form as FormData);
+        setQuestions(result.questions as Question[]);
+        setResponses(result.responses as Response[]);
+        setAnswers(result.answers as Answer[]);
+        const uniqueCats = Array.from(new Set((result.questions as any[]).map((q: any) => q.minLabel).filter(Boolean))) as string[];
+        setCategories(uniqueCats);
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -67,14 +61,11 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     if (!form) return;
     setSaving(true);
     try {
-      await databases.updateDocument(db, "forms", form.$id, { title: form.title, description: form.description });
+      await updateFormServer(form.$id, { title: form.title, description: form.description });
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
-        if (q.$id.startsWith("new_")) {
-          await databases.createDocument(db, "questions", ID.unique(), { formId: form.$id, text: q.text, type: q.type, options: q.options, required: q.required, order: i });
-        } else {
-          await databases.updateDocument(db, "questions", q.$id, { text: q.text, type: q.type, options: q.options, required: q.required, order: i });
-        }
+        const isNew = q.$id.startsWith("new_");
+        await saveQuestionServer(q.$id, form.$id, { text: q.text, type: q.type, options: q.options, required: q.required, order: i }, isNew);
       }
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (e) { console.error(e); alert("خطأ أثناء الحفظ"); }
@@ -144,23 +135,17 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file || !form) return;
       try {
-        const bucketId = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_LOGOS || "university_logos";
-        let url = "";
-        try {
-          const uploaded = await storage.createFile(bucketId, ID.unique(), file);
-          url = storage.getFilePreview(bucketId, uploaded.$id, 200, 200).toString();
-        } catch (storageErr) {
-          url = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
-        }
-        await databases.updateDocument(db, "forms", form.$id, { [type]: url });
+        // Convert to base64 for storage in document (no client SDK needed)
+        const url = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        await updateFormServer(form.$id, { [type]: url });
         setForm({ ...form, [type]: url });
       } catch (e: any) { 
         console.error(e); 
-        alert("خطأ في رفع الصورة. تأكد من أن مساحة الحقل في قاعدة البيانات (Appwrite) تدعم الحجم، وأن الـ Bucket (university_logos) موجود. التفاصيل: " + (e?.message || "")); 
+        alert("خطأ في رفع الصورة: " + (e?.message || "")); 
       }
     };
     input.click();
@@ -214,16 +199,11 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         const questionIdMap = new Map();
         for (let i = 0; i < headers.length; i++) {
           if (!headers[i]) continue;
-          const qId = ID.unique();
-          await databases.createDocument(db, "questions", qId, {
-            formId: form.$id,
-            text: headers[i],
-            type: "likert",
-            options: ["1", "2", "3", "4", "5"],
-            required: true,
-            order: questions.length + i,
-          });
-          questionIdMap.set(i, qId);
+          const qResult = await saveQuestionServer("", form.$id, {
+            text: headers[i], type: "likert", options: ["1", "2", "3", "4", "5"],
+            required: true, order: questions.length + i,
+          }, true);
+          if (qResult.success && qResult.newId) questionIdMap.set(i, qResult.newId);
         }
         const maxDays = 6;
         for (let i = 0; i < dataRows.length; i++) {
@@ -234,16 +214,13 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
           const submitDate = new Date(startDate);
           submitDate.setDate(submitDate.getDate() + randomDays);
           submitDate.setHours(randomHours, randomMinutes, 0, 0);
-          const responseId = ID.unique();
-          await databases.createDocument(db, "responses", responseId, { formId: form.$id, submittedAt: submitDate.toISOString() });
+          const rResult = await createResponseServer(form.$id, submitDate.toISOString());
+          if (!rResult.success || !rResult.responseId) continue;
           for (let j = 0; j < headers.length; j++) {
             if (!headers[j]) continue;
             const val = row[j];
             if (val !== undefined && val !== null && val !== "") {
-              await databases.createDocument(db, "response_answers", ID.unique(), {
-                formId: form.$id, responseId: responseId, questionId: questionIdMap.get(j),
-                numberValue: !isNaN(Number(val)) ? Number(val) : null, textValue: String(val)
-              });
+              await createAnswerServer(form.$id, rResult.responseId, questionIdMap.get(j), String(val), !isNaN(Number(val)) ? Number(val) : null);
             }
           }
         }

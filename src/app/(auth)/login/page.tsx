@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { account } from "@/lib/appwrite";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { serverLogin } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,29 +18,16 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Don't delete existing sessions - allow multiple device login
-      try { 
-        await account.createEmailPasswordSession(email, password);
-      } catch (sessionErr: any) {
-        // If already has a session, try to use it
-        if (sessionErr?.code === 401 || sessionErr?.type === 'user_already_has_session') {
-          // Already logged in, just redirect
-          window.location.href = "/dashboard";
-          return;
-        }
-        throw sessionErr;
-      }
-      window.location.href = "/dashboard";
-    } catch (err: any) {
-      const msg = err?.message || "فشل تسجيل الدخول. يرجى التحقق من بياناتك.";
-      // Make error messages more user-friendly
-      if (msg.includes("fetch") || msg.includes("Failed") || msg.includes("network")) {
-        setError("خطأ في الاتصال بالخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.");
-      } else if (msg.includes("Invalid credentials") || msg.includes("password")) {
-        setError("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
+      // Server Action - no direct connection to Appwrite needed!
+      const result = await serverLogin(email, password);
+      
+      if (result.success) {
+        window.location.href = "/dashboard";
       } else {
-        setError(msg);
+        setError(result.error || "فشل تسجيل الدخول.");
       }
+    } catch (err: any) {
+      setError("خطأ في الاتصال. يرجى المحاولة مرة أخرى.");
     } finally {
       setLoading(false);
     }

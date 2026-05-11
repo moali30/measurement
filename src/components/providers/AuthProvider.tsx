@@ -1,12 +1,18 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { account, teams } from "@/lib/appwrite";
-import { Models } from "appwrite";
+import { getServerUser, serverLogout } from "@/app/actions/auth";
+
+interface UserData {
+  $id: string;
+  name: string;
+  email: string;
+  registration: string;
+}
 
 interface AuthContextType {
-  user: Models.User<Models.Preferences> | null;
-  team: Models.Team<Models.Preferences> | null;
+  user: UserData | null;
+  team: null;
   loading: boolean;
   logout: () => Promise<void>;
 }
@@ -19,27 +25,21 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
-  const [team, setTeam] = useState<Models.Team<Models.Preferences> | null>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const init = async () => {
       try {
-        const currentUser = await account.get();
-        setUser(currentUser);
-
-        try {
-          const userTeams = await teams.list();
-          if (userTeams.teams.length > 0) {
-            setTeam(userTeams.teams[0]);
-          }
-        } catch (teamError) {
-          console.error("No team found or error fetching team", teamError);
+        // Use Server Action to check auth - no direct Appwrite connection!
+        const result = await getServerUser();
+        if (result.success && result.user) {
+          setUser(result.user as UserData);
+        } else {
+          setUser(null);
         }
       } catch {
         setUser(null);
-        setTeam(null);
       } finally {
         setLoading(false);
       }
@@ -49,13 +49,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = async () => {
-    await account.deleteSession("current");
+    await serverLogout();
     setUser(null);
-    setTeam(null);
+    window.location.href = "/login";
   };
 
   return (
-    <AuthContext.Provider value={{ user, team, loading, logout }}>
+    <AuthContext.Provider value={{ user, team: null, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

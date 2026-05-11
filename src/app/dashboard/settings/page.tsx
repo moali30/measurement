@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { account } from "@/lib/appwrite";
+import { updateNameServer, changePasswordServer } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { User, Lock, Bell, Globe, Palette, Shield, ChevronLeft, Check } from "lucide-react";
 
@@ -41,7 +41,7 @@ export default function SettingsPage() {
 
   const saveName = async () => {
     setSaving(true);
-    try { await account.updateName(name); setSaved(true); setTimeout(()=>setSaved(false),2000); } catch(e){console.error(e);}
+    try { await updateNameServer(name); setSaved(true); setTimeout(()=>setSaved(false),2000); } catch(e){console.error(e);}
     finally { setSaving(false); }
   };
 
@@ -50,7 +50,11 @@ export default function SettingsPage() {
     if(newPassword.length < 8) { setPassError("كلمة المرور يجب أن تكون 8 أحرف على الأقل"); return; }
     if(newPassword !== confirmPassword) { setPassError("كلمة المرور غير متطابقة"); return; }
     setSaving(true);
-    try { await account.updatePassword(newPassword, oldPassword); setSaved(true); setOldPassword(""); setNewPassword(""); setConfirmPassword(""); setTimeout(()=>setSaved(false),2000); } 
+    try { 
+      const result = await changePasswordServer(newPassword, oldPassword);
+      if (result.success) { setSaved(true); setOldPassword(""); setNewPassword(""); setConfirmPassword(""); setTimeout(()=>setSaved(false),2000); }
+      else { setPassError(result.error || "حدث خطأ"); }
+    } 
     catch(e:unknown) { setPassError(e instanceof Error ? e.message : "حدث خطأ"); }
     finally { setSaving(false); }
   };

@@ -5,8 +5,7 @@ import { FileText, Users, Activity, BarChart2, Plus, ArrowUpLeft, TrendingUp } f
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { databases } from "@/lib/appwrite";
-import { Query } from "appwrite";
+import { listFormsServer } from "@/app/actions/dashboard";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -18,11 +17,13 @@ export default function DashboardPage() {
     if(!user) return;
     const load = async () => {
       try {
-        const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
-        const forms = await databases.listDocuments(db, "forms", [Query.limit(100)]);
-        setFormCount(forms.total);
-        setActiveCount(forms.documents.filter((f:any)=>f.status==="active").length);
-        setResponseCount(forms.documents.reduce((s:number,f:any)=>s+(f.responsesCount||0),0));
+        // Server Action - no direct Appwrite connection!
+        const result = await listFormsServer();
+        if (result.success && result.forms) {
+          setFormCount(result.forms.length);
+          setActiveCount(result.forms.filter((f:any)=>f.status==="active").length);
+          setResponseCount(result.forms.reduce((s:number,f:any)=>s+(f.responsesCount||0),0));
+        }
       } catch(e) { console.error(e); }
     };
     load();

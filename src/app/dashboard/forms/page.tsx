@@ -4,9 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Plus, Search, FileText, MoreHorizontal, Trash2, Share2, BarChart2, Eye, EyeOff, Clock, CheckCircle, Edit3, Grid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { databases } from "@/lib/appwrite";
-import { Query } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
+import { listFormsServer, deleteFormServer, toggleFormStatusServer } from "@/app/actions/dashboard";
 
 interface Form { $id: string; title: string; description: string; status: string; responsesCount: number; createdAt: string; slug: string; }
 
@@ -24,21 +23,33 @@ export default function FormsListPage() {
   const loadForms = async () => {
     setLoading(true);
     try {
-      const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
-      const r = await databases.listDocuments(db, "forms", [Query.orderDesc("$createdAt"), Query.limit(50)]);
-      setForms(r.documents as unknown as Form[]);
+      // Server Action - no direct Appwrite connection!
+      const result = await listFormsServer();
+      if (result.success) {
+        setForms(result.forms as Form[]);
+      }
     } catch(e) { console.error(e); } finally { setLoading(false); }
   };
 
   const deleteForm = async (id: string) => {
     if(!confirm("هل أنت متأكد من حذف هذا الاستبيان؟")) return;
-    try { await databases.deleteDocument(process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID||"aems_db","forms",id); setForms(f=>f.filter(x=>x.$id!==id)); } catch(e){console.error(e);}
+    try {
+      const result = await deleteFormServer(id);
+      if (result.success) {
+        setForms(f => f.filter(x => x.$id !== id));
+      }
+    } catch(e) { console.error(e); }
     setOpenMenuId(null);
   };
 
   const toggleStatus = async (form: Form) => {
     const s = form.status==="active"?"draft":"active";
-    try { await databases.updateDocument(process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID||"aems_db","forms",form.$id,{status:s}); setForms(f=>f.map(x=>x.$id===form.$id?{...x,status:s}:x)); } catch(e){console.error(e);}
+    try {
+      const result = await toggleFormStatusServer(form.$id, s);
+      if (result.success) {
+        setForms(f => f.map(x => x.$id===form.$id ? {...x, status: s} : x));
+      }
+    } catch(e) { console.error(e); }
     setOpenMenuId(null);
   };
 
