@@ -10,7 +10,7 @@ import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 
 interface FormData { $id: string; title: string; description: string; status: string; slug: string; responsesCount: number; createdAt: string; collegeLogo?: string; universityLogo?: string; qualityLogo?: string; }
-interface Question { $id: string; text: string; type: string; options: string[]; required: boolean; order: number; }
+interface Question { $id: string; text: string; type: string; options: string[]; required: boolean; order: number; minLabel?: string; maxLabel?: string; minValue?: number; maxValue?: number; }
 interface Response { $id: string; submittedAt: string; }
 interface Answer { $id: string; responseId: string; questionId: string; textValue?: string; numberValue?: number; selectedOptions?: string[]; }
 
@@ -353,31 +353,31 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         for (let ri = 0; ri < responses.length; ri++) {
           const r = responses[ri];
           let html = `<div dir="rtl" style="font-family: system-ui, -apple-system, sans-serif; padding-top: 10px; background-color: white; color: black; line-height: 1.5;">`;
-          let headerHtml = \`\`;
+          let headerHtml = ``;
           if (b64College || b64University || b64Quality) {
-            headerHtml = \`
+            headerHtml = `
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px;">
-                <div style="width: 80px;">\${b64Quality ? \`<img src="\${b64Quality}" style="max-height: 80px; max-width: 100%; object-fit: contain;" />\` : ''}</div>
+                <div style="width: 80px;">${b64Quality ? `<img src="${b64Quality}" style="max-height: 80px; max-width: 100%; object-fit: contain;" />` : ''}</div>
                 <div style="text-align: center; flex: 1; padding: 0 15px;">
-                  <h1 style="font-size: 22px; font-weight: bold; margin: 0 0 5px 0; color: black;">\${form.title}</h1>
-                  <p style="color: #6b7280; font-size: 13px; margin: 0;">رد #\${ri + 1} | \${fmtDate(r.submittedAt)}</p>
+                  <h1 style="font-size: 22px; font-weight: bold; margin: 0 0 5px 0; color: black;">${form.title}</h1>
+                  <p style="color: #6b7280; font-size: 13px; margin: 0;">رد #${ri + 1} | ${fmtDate(r.submittedAt)}</p>
                 </div>
                 <div style="width: 80px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                  \${b64University ? \`<img src="\${b64University}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />\` : ''}
-                  \${b64College ? \`<img src="\${b64College}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />\` : ''}
+                  ${b64University ? `<img src="${b64University}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />` : ''}
+                  ${b64College ? `<img src="${b64College}" style="max-height: 50px; max-width: 100%; object-fit: contain;" />` : ''}
                 </div>
-              </div>\`;
+              </div>`;
           } else {
-            headerHtml = \`
+            headerHtml = `
               <div style="text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 20px;">
-                <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 10px 0; color: black;">\${form.title}</h1>
-                <p style="color: #6b7280; font-size: 14px; margin: 0;">رد #\${ri + 1} | التاريخ: \${fmtDate(r.submittedAt)}</p>
-              </div>\`;
+                <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 10px 0; color: black;">${form.title}</h1>
+                <p style="color: #6b7280; font-size: 14px; margin: 0;">رد #${ri + 1} | التاريخ: ${fmtDate(r.submittedAt)}</p>
+              </div>`;
           }
 
           const doc = iframe.contentWindow!.document;
           doc.open();
-          doc.write(\`
+          doc.write(`
             <!DOCTYPE html>
             <html dir="rtl">
             <head>
@@ -393,7 +393,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               <div id="printContainer"></div>
             </body>
             </html>
-          \`);
+          `);
           doc.close();
 
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -429,10 +429,10 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             qEl.style.borderBottomWidth = "1px";
             qEl.style.padding = "12px 16px";
             qEl.style.marginBottom = "12px";
-            qEl.innerHTML = \`
-                <h3 style="font-size: 15px; font-weight: 600; color: #1f2937; margin: 0 0 6px 0;">\${qi + 1}. \${q.text}</h3>
-                <p style="font-size: 14px; color: #4b5563; margin: 0;">الرد: <strong style="color: #2563eb;">\${ansText}</strong></p>
-            \`;
+            qEl.innerHTML = `
+                <h3 style="font-size: 15px; font-weight: 600; color: #1f2937; margin: 0 0 6px 0;">${qi + 1}. ${q.text}</h3>
+                <p style="font-size: 14px; color: #4b5563; margin: 0;">الرد: <strong style="color: #2563eb;">${ansText}</strong></p>
+            `;
 
             currentPage.appendChild(qEl);
             const qHeight = qEl.offsetHeight;
@@ -471,7 +471,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             pdf.addImage(imgData, "JPEG", 0, 0, 210, 297);
           }
 
-          zip.file(\`response_\${ri + 1}.pdf\`, pdf.output("arraybuffer"));
+          zip.file(`response_${ri + 1}.pdf`, pdf.output("arraybuffer"));
         }
         const blob = await zip.generateAsync({ type: "blob" });
         saveAs(blob, `${form.title}_PDFs.zip`);
