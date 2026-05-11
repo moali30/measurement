@@ -34,8 +34,8 @@ export function AppSidebar() {
       {/* Logo */}
       <div className="flex items-center justify-between h-16 border-b border-gray-100 px-4">
         {!collapsed && (
-          <h1 className="text-xl font-bold bg-gradient-to-l from-blue-700 to-blue-500 bg-clip-text text-transparent flex items-center gap-2">
-            🎓 AEMS
+          <h1 className="text-sm font-bold bg-gradient-to-l from-blue-700 to-blue-500 bg-clip-text text-transparent flex items-center gap-2 leading-tight">
+            🎓 إدارة الاستبيانات (القياس والتقويم)
           </h1>
         )}
         {collapsed && <span className="text-2xl mx-auto">🎓</span>}
