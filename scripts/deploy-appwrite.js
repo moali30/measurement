@@ -5,8 +5,8 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const ENDPOINT = "https://fra.cloud.appwrite.io/v1";
-const PROJECT_ID = "6a011611000d48ca704b";
-const API_KEY = "standard_f11ab7e4232ba688d25f054317b0604aa63631fa8431e8e503b3382560322812c4ddd2e0b3a8416c284f53f7a1ea2608c8f6eb7decad6dee859b49d8489fba75a69c20f0934bf74b89467e6fef4f0e3de2085801985b4da4c65248410312bdb7bd8d707723c6735c22cf84fb471e4ada9891a1145fed5142fb16b4cdb2d3c14b";
+const PROJECT_ID = "69b7fc49003cc7c030ae";
+const API_KEY = "standard_2dca5d5f948513772e540167e6ac4e0eb306d46094b624f072d356c7633f07ba6c26e5e34693ecc704e1b2df5eef58feeaf9ac91fe8a441bf53b459feab16d83826afe218c557ef6f9f4ea802b14b6e0247f4481d62791208978afc5f4413177340a72f36f6fcc8fec2853dd6b27afe6a2ff631ae9e5f6c118085f20d03c2aab";
 
 const SITE_ID = "aems-site";
 
