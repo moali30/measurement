@@ -244,10 +244,22 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
 
         {/* Questions */}
         <div className="space-y-4">
-          {questions.map((q, idx) => (
-            <div key={q.$id} className={`bg-white rounded-2xl shadow-sm border p-6 transition-all ${validationErrors[q.$id] ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-100'}`}>
-              <div className="flex items-start gap-3 mb-4">
-                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{idx + 1}</span>
+          {questions.map((q, idx) => {
+            const prevCat = idx > 0 ? questions[idx - 1].minLabel : null;
+            const showHeader = q.minLabel && q.minLabel !== prevCat;
+            
+            return (
+              <div key={q.$id}>
+                {showHeader && (
+                  <div className="mt-8 mb-4 flex items-center gap-3">
+                    <div className="h-px bg-gray-200 flex-1" />
+                    <h2 className="text-lg font-bold text-blue-800 bg-blue-50 px-6 py-2 rounded-full border border-blue-100">{q.minLabel}</h2>
+                    <div className="h-px bg-gray-200 flex-1" />
+                  </div>
+                )}
+                <div className={`bg-white rounded-2xl shadow-sm border p-6 transition-all ${validationErrors[q.$id] ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-100'}`}>
+                  <div className="flex items-start gap-3 mb-4">
+                    <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{idx + 1}</span>
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900">
                     {q.text}
@@ -374,7 +386,8 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
                 )}
               </div>
             </div>
-          ))}
+            </div>
+          )})}
         </div>
 
         {/* Submit */}

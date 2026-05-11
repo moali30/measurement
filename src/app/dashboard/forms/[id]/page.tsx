@@ -28,6 +28,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [saved, setSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
   const db = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "aems_db";
 
@@ -47,6 +48,10 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       setForm(f);
       const qs = await databases.listDocuments(db, "questions", [Query.equal("formId", params.id), Query.orderAsc("order"), Query.limit(100)]);
       setQuestions(qs.documents as unknown as Question[]);
+      
+      const uniqueCats = Array.from(new Set(qs.documents.map((q: any) => q.minLabel).filter(Boolean))) as string[];
+      setCategories(uniqueCats);
+
       const rs = await databases.listDocuments(db, "responses", [Query.equal("formId", params.id), Query.orderDesc("submittedAt"), Query.limit(500)]);
       setResponses(rs.documents as unknown as Response[]);
       if (rs.documents.length > 0) {
@@ -555,6 +560,32 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors text-sm resize-none" placeholder="وصف تفصيلي للاستبيان..." />
             </div>
           </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-700">إدارة المحاور (الفئات)</h3>
+              <Button size="sm" variant="outline" onClick={() => {
+                const c = prompt("أدخل اسم المحور الجديد:");
+                if (c && c.trim() && !categories.includes(c.trim())) setCategories([...categories, c.trim()]);
+              }} className="text-xs h-8">إضافة محور جديد</Button>
+            </div>
+            {categories.length === 0 ? (
+              <p className="text-xs text-gray-400">لا توجد محاور مضافة حالياً. يمكنك إضافتها لربط الأسئلة بها.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {categories.map((c, i) => (
+                  <div key={i} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs border border-blue-100">
+                    {c}
+                    <button onClick={() => {
+                      if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
+                        setCategories(categories.filter(cat => cat !== c));
+                        setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
+                      }
+                    }} className="mr-2 hover:text-red-500 font-bold">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {questions.map((q, qi) => (
             <div key={q.$id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
               <div className="flex items-start gap-3">
@@ -588,16 +619,23 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               </div>
               <div className="mt-3 mr-9 flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
                 <span className="text-xs font-medium text-gray-500">المحور المرتبط:</span>
-                <input type="text" value={q.minLabel || ""} onChange={e => updateQ(q.$id, { minLabel: e.target.value })} className="flex-1 text-xs bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5" placeholder="اكتب اسم المحور (اختياري) لتجميع الإحصائيات..." />
+                <select value={q.minLabel || ""} onChange={e => updateQ(q.$id, { minLabel: e.target.value })} className="flex-1 text-xs bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5 cursor-pointer">
+                  <option value="">بدون محور</option>
+                  {categories.map((c, i) => <option key={i} value={c}>{c}</option>)}
+                </select>
               </div>
             </div>
           ))}
           <div className="flex gap-3 flex-wrap">
             <Button variant="outline" onClick={() => addQuestion()} className="rounded-xl flex gap-2"><Plus size={16} />إضافة سؤال</Button>
-            <Button variant="outline" onClick={importQuestionsOnly} disabled={saving} className="rounded-xl flex gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">إضافة أسئلة عبر Excel</Button>
-            <Button variant="outline" onClick={() => addQuestion({ text: "الاسم", type: "text", required: false }, true)} className="rounded-xl flex gap-2 text-blue-600 border-blue-200 hover:bg-blue-50">إضافة حقل الاسم (اختياري)</Button>
-            <Button variant="outline" onClick={distributeNamesFromExcel} disabled={saving} className="rounded-xl flex gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"><FileSpreadsheet size={16} />توزيع أسماء (Excel)</Button>
-            <Button variant="outline" onClick={importExcelData} disabled={saving} className="rounded-xl flex gap-2 text-green-600 border-green-200 hover:bg-green-50"><FileSpreadsheet size={16} />استيراد إجابات Excel</Button>
+            {user?.email === "admin@aems.app" && (
+              <>
+                <Button variant="outline" onClick={importQuestionsOnly} disabled={saving} className="rounded-xl flex gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">إضافة أسئلة عبر Excel</Button>
+                <Button variant="outline" onClick={() => addQuestion({ text: "الاسم", type: "text", required: false }, true)} className="rounded-xl flex gap-2 text-blue-600 border-blue-200 hover:bg-blue-50">إضافة حقل الاسم (اختياري)</Button>
+                <Button variant="outline" onClick={distributeNamesFromExcel} disabled={saving} className="rounded-xl flex gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"><FileSpreadsheet size={16} />توزيع أسماء (Excel)</Button>
+                <Button variant="outline" onClick={importExcelData} disabled={saving} className="rounded-xl flex gap-2 text-green-600 border-green-200 hover:bg-green-50"><FileSpreadsheet size={16} />استيراد إجابات Excel</Button>
+              </>
+            )}
             <Button onClick={saveQuestions} disabled={saving} className={`rounded-xl flex gap-2 ${saved ? 'bg-green-500' : 'bg-blue-600 hover:bg-blue-700'}`}>{saving ? "جاري الحفظ..." : saved ? "✓ تم الحفظ" : <><Save size={16} />حفظ التعديلات</>}</Button>
           </div>
         </div>
