@@ -1,5 +1,5 @@
 "use server";
-import { Client, Account, Users } from 'node-appwrite';
+import { Client, Account, Users, Query } from 'node-appwrite';
 import { cookies } from 'next/headers';
 import { config } from '@/lib/config';
 
@@ -40,7 +40,7 @@ export async function serverLogin(email: string, password: string) {
     }
     
     // Get user info using Admin SDK
-    const userList = await users.list([`email("${email}")`]);
+    const userList = await users.list([Query.equal("email", [email])]);
     const userDoc = userList.users[0];
     
     if (!userDoc) {
