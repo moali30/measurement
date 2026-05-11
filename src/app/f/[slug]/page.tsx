@@ -34,6 +34,7 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
   useEffect(() => {
     loadForm();
@@ -60,6 +61,14 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
         setError("closed");
         setLoading(false);
         return;
+      }
+
+      if (formDoc.description?.includes("[single_response]")) {
+        if (localStorage.getItem(`submitted_${formDoc.$id}`)) {
+          setAlreadySubmitted(true);
+          setLoading(false);
+          return;
+        }
       }
 
       setForm(formDoc);
@@ -146,6 +155,10 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
         });
       } catch {}
 
+      if (form.description?.includes("[single_response]")) {
+        localStorage.setItem(`submitted_${form.$id}`, "true");
+      }
+
       setSubmitted(true);
     } catch (err) {
       console.error(err);
@@ -187,6 +200,20 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
           <div className="text-6xl mb-4">🔒</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">الاستبيان مغلق</h2>
           <p className="text-gray-500 text-sm">هذا الاستبيان لم يعد يقبل ردوداً جديدة</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (alreadySubmitted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border-t-4 border-amber-500">
+          <div className="w-20 h-20 mx-auto bg-amber-100 rounded-full flex items-center justify-center mb-6">
+            <span className="text-4xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">عذراً</h2>
+          <p className="text-gray-600 mb-6">لقد قمت بالرد على هذا الاستبيان مسبقاً. لا يُسمح بأكثر من رد واحد.</p>
         </div>
       </div>
     );
@@ -235,7 +262,9 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
               <span className="text-2xl">📋</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">{form?.title}</h1>
-            {form?.description && <p className="text-gray-500 text-sm">{form.description}</p>}
+            {form?.description && (
+              <p className="text-gray-500 text-sm whitespace-pre-wrap">{form.description.replace("[single_response]", "").trim()}</p>
+            )}
             <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-400">
               <span>🔒 إجاباتك سرية ومجهولة الهوية</span>
             </div>

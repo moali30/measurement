@@ -557,7 +557,21 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
             <div className="p-6">
               <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full text-2xl font-bold border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="عنوان الاستبيان" />
-              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors text-sm resize-none" placeholder="وصف تفصيلي للاستبيان..." />
+              <textarea value={form.description.replace("[single_response]", "").trim()} onChange={e => setForm({ ...form, description: e.target.value + (form.description.includes("[single_response]") ? "\n[single_response]" : "") })} rows={4} className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors text-sm resize-none" placeholder="وصف تفصيلي للاستبيان..." />
+              <div className="mt-4 flex items-center justify-between bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800">منع الردود المتعددة</h4>
+                  <p className="text-xs text-gray-500">يسمح برد واحد فقط لكل جهاز/متصفح لضمان عدم التكرار.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={form.description.includes("[single_response]")} onChange={e => {
+                    const hasSingle = form.description.includes("[single_response]");
+                    if (e.target.checked && !hasSingle) setForm({ ...form, description: form.description + "\n[single_response]" });
+                    else if (!e.target.checked && hasSingle) setForm({ ...form, description: form.description.replace("[single_response]", "").trim() });
+                  }} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
