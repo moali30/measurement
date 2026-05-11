@@ -44,7 +44,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             مرحباً، {user?.name || "المستخدم"} 👋
           </h1>
-          <p className="text-sm text-gray-500 mt-1">إليك نظرة عامة على نظامك</p>
+          <p className="text-sm text-gray-500 mt-1">رئيس لجنة القياس والتقويم</p>
         </div>
         <Link href="/dashboard/forms/create">
           <Button className="bg-gradient-to-l from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl flex gap-2 px-5 shadow-md shadow-blue-200 h-11">
