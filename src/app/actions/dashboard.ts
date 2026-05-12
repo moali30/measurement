@@ -223,3 +223,38 @@ export async function createFormServer(
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Delete all answers for a specific question - used to reset name distribution.
+ */
+export async function deleteAnswersByQuestionServer(formId: string, questionId: string) {
+  try {
+    const databases = new Databases(getAdminClient());
+    const dbId = config.databaseId;
+    
+    // Fetch all answers for this question
+    let allDocs: any[] = [];
+    let offset = 0;
+    const batchSize = 100;
+    while (true) {
+      const batch = await databases.listDocuments(dbId, "response_answers", [
+        Query.equal("formId", formId),
+        Query.equal("questionId", questionId),
+        Query.limit(batchSize),
+        Query.offset(offset),
+      ]);
+      allDocs = allDocs.concat(batch.documents);
+      if (batch.documents.length < batchSize) break;
+      offset += batchSize;
+    }
+
+    // Delete them all
+    for (const doc of allDocs) {
+      await databases.deleteDocument(dbId, "response_answers", doc.$id);
+    }
+
+    return { success: true, deleted: allDocs.length };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

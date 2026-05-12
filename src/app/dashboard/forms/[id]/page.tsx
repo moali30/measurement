@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
-import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer } from "@/app/actions/dashboard";
+import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer } from "@/app/actions/dashboard";
 
 interface FormData { $id: string; title: string; description: string; status: string; slug: string; responsesCount: number; createdAt: string; collegeLogo?: string; universityLogo?: string; qualityLogo?: string; }
 interface Question { $id: string; text: string; type: string; options: string[]; required: boolean; order: number; minLabel?: string; maxLabel?: string; minValue?: number; maxValue?: number; }
@@ -294,6 +294,24 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       finally { setSaving(false); }
     };
     input.click();
+  };
+
+  const resetNameDistribution = async () => {
+    if (!form) return;
+    const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
+    if (!nameQ) { alert("لا يوجد سؤال 'الاسم' في هذا الاستبيان."); return; }
+    if (nameQ.$id.startsWith("new_")) { alert("سؤال الاسم لم يُحفظ بعد."); return; }
+    const nameAnswers = answers.filter(a => a.questionId === nameQ.$id);
+    if (nameAnswers.length === 0) { alert("لا توجد أسماء موزعة حالياً."); return; }
+    if (!confirm(`هل أنت متأكد من إلغاء توزيع الأسماء؟\n\nسيتم حذف ${nameAnswers.length} اسم من الردود.\nيمكنك إعادة التوزيع بعد ذلك.`)) return;
+    setSaving(true);
+    try {
+      const result = await deleteAnswersByQuestionServer(form.$id, nameQ.$id);
+      if (!result.success) throw new Error(result.error);
+      alert(`تم إلغاء توزيع الأسماء بنجاح! (${result.deleted} اسم)`);
+      loadAll();
+    } catch (error: any) { console.error(error); alert("خطأ: " + (error?.message || "")); }
+    finally { setSaving(false); }
   };
 
   const getBase64ImageFromUrl = async (imageUrl: string) => {
@@ -761,6 +779,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                 <Button variant="outline" onClick={importQuestionsOnly} disabled={saving} className="rounded-xl flex gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">إضافة أسئلة عبر Excel</Button>
                 <Button variant="outline" onClick={() => addQuestion({ text: "الاسم", type: "text", required: false }, true)} className="rounded-xl flex gap-2 text-blue-600 border-blue-200 hover:bg-blue-50">إضافة حقل الاسم (اختياري)</Button>
                 <Button variant="outline" onClick={distributeNamesFromExcel} disabled={saving} className="rounded-xl flex gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"><FileSpreadsheet size={16} />توزيع أسماء (Excel)</Button>
+                <Button variant="outline" onClick={resetNameDistribution} disabled={saving} className="rounded-xl flex gap-2 text-red-500 border-red-200 hover:bg-red-50"><Trash2 size={16} />إلغاء التوزيع</Button>
                 <Button variant="outline" onClick={importExcelData} disabled={saving} className="rounded-xl flex gap-2 text-green-600 border-green-200 hover:bg-green-50"><FileSpreadsheet size={16} />استيراد إجابات Excel</Button>
               </>
             )}
