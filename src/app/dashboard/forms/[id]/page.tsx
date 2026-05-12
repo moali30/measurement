@@ -49,7 +49,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       if (result.success) {
         setForm({ ...(result.form as FormData), description: (result.form as FormData).description || "" });
         setQuestions(result.questions as Question[]);
-        const sortedResponses = (result.responses as Response[]).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        const sortedResponses = (result.responses as Response[]).sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
         setResponses(sortedResponses);
         setAnswers(result.answers as Answer[]);
         const uniqueCats = Array.from(new Set((result.questions as any[]).map((q: any) => q.minLabel).filter(Boolean))) as string[];
