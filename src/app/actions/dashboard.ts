@@ -258,3 +258,38 @@ export async function deleteAnswersByQuestionServer(formId: string, questionId: 
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Enable single_response mode on ALL existing forms that don't have it yet.
+ */
+export async function enableSingleResponseForAllServer() {
+  try {
+    const databases = new Databases(getAdminClient());
+    const dbId = config.databaseId;
+    
+    let allForms: any[] = [];
+    let offset = 0;
+    while (true) {
+      const batch = await databases.listDocuments(dbId, "forms", [
+        Query.limit(100), Query.offset(offset),
+      ]);
+      allForms = allForms.concat(batch.documents);
+      if (batch.documents.length < 100) break;
+      offset += 100;
+    }
+
+    let updated = 0;
+    for (const form of allForms) {
+      const desc = form.description || "";
+      if (!desc.includes("[single_response]")) {
+        const newDesc = (desc + "\n[single_response]").substring(0, 2000);
+        await databases.updateDocument(dbId, "forms", form.$id, { description: newDesc });
+        updated++;
+      }
+    }
+
+    return { success: true, total: allForms.length, updated };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

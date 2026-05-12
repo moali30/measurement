@@ -5,13 +5,14 @@ import { FileText, Users, Activity, BarChart2, Plus, ArrowUpLeft, TrendingUp } f
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { listFormsServer } from "@/app/actions/dashboard";
+import { listFormsServer, enableSingleResponseForAllServer } from "@/app/actions/dashboard";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [formCount, setFormCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
   const [responseCount, setResponseCount] = useState(0);
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     if(!user) return;
@@ -90,6 +91,30 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Admin: Enable single response for all */}
+      {user?.email === "admin@aems.app" && (
+        <div className="bg-amber-50 rounded-2xl p-6 border border-amber-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-amber-900">أدوات المسؤول</h3>
+              <p className="text-xs text-amber-700 mt-1">تفعيل منع الردود المتعددة على جميع الاستبيانات الموجودة</p>
+            </div>
+            <Button disabled={running} onClick={async () => {
+              if (!confirm("هل أنت متأكد؟ سيتم تفعيل وضع 'رد واحد فقط' على كل الاستبيانات.")) return;
+              setRunning(true);
+              try {
+                const r = await enableSingleResponseForAllServer();
+                if (r.success) alert(`تم بنجاح! تم تحديث ${r.updated} من أصل ${r.total} استبيان.`);
+                else alert("خطأ: " + r.error);
+              } catch (e: any) { alert("خطأ: " + e.message); }
+              finally { setRunning(false); }
+            }} variant="outline" className="rounded-xl text-amber-700 border-amber-300 hover:bg-amber-100 text-xs">
+              {running ? "جاري التنفيذ..." : "تفعيل لجميع الاستبيانات"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
