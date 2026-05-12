@@ -63,8 +63,8 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     if (!form) return;
     setSaving(true);
     try {
-      const descToSave = form.description || "";
-      const formResult = await updateFormServer(form.$id, { title: form.title, description: descToSave });
+      const descToSave = String(form.description || "").substring(0, 2000);
+      const formResult = await updateFormServer(form.$id, { title: String(form.title || "").substring(0, 255), description: descToSave });
       if (!formResult.success) { alert("خطأ في حفظ بيانات الاستبيان: " + (formResult.error || "")); setSaving(false); return; }
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
@@ -402,52 +402,59 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
 
           let currentY = 40 + headerEl.offsetHeight;
 
-          for (let qi = 0; qi < questions.length; qi++) {
-            const q = questions[qi];
-            const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
-            let ansText = "—";
-            if (a) {
-              let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
-              if (a.selectedOptions?.length) {
-                ansText = a.selectedOptions.join("، ");
-              } else if (valStr) {
-                ansText = valStr;
-                if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) {
-                  ansText = q.options[5 - parseInt(valStr)];
-                }
-              }
+          // Helper to add element with page break logic
+          const addElement = (el: HTMLElement) => {
+            currentPage.appendChild(el);
+            const h = el.offsetHeight;
+            if (currentY + h > 1050) {
+              currentPage.removeChild(el);
+              const footer = doc.createElement("div"); footer.className = "footer"; footer.innerText = "AEMS - نظام إدارة القياس والتقويم الأكاديمي"; currentPage.appendChild(footer);
+              currentPage = doc.createElement("div"); currentPage.className = "page"; container.appendChild(currentPage); currentPage.appendChild(el);
+              currentY = 40 + h;
+            } else { currentY += h; }
+          };
+
+          // Group questions by category
+          const grouped: { cat: string; items: { q: typeof questions[0]; idx: number }[] }[] = [];
+          let currentCat = "__none__";
+          questions.forEach((q, qi) => {
+            const cat = q.minLabel || "";
+            if (cat !== currentCat || grouped.length === 0) {
+              grouped.push({ cat, items: [] });
+              currentCat = cat;
+            }
+            grouped[grouped.length - 1].items.push({ q, idx: qi });
+          });
+
+          let globalIdx = 0;
+          for (const group of grouped) {
+            // Add category header if exists
+            if (group.cat) {
+              const catEl = doc.createElement("div");
+              catEl.style.cssText = "padding: 8px 16px; margin: 12px 0 4px 0; border-bottom: 2px solid #000; border-top: 1px solid #ccc;";
+              catEl.innerHTML = `<h2 style="font-size: 15px; font-weight: 700; color: #000; margin: 0;">${group.cat}</h2>`;
+              addElement(catEl);
             }
 
-            const qEl = doc.createElement("div");
-            qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${qi % 2 === 0 ? '#f8f8f8' : 'white'};`;
-            const categoryTag = q.minLabel ? `<span style="display: inline-block; font-size: 9px; border: 1px solid #999; color: #333; padding: 1px 6px; border-radius: 3px; margin-right: 6px;">${q.minLabel}</span>` : '';
-            qEl.innerHTML = `
-                <div style="display: flex; align-items: flex-start; gap: 10px;">
-                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${qi + 1}</span>
-                  <div style="flex: 1;">
-                    <h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}${categoryTag}</h3>
-                    <div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div>
-                  </div>
+            for (const { q, idx } of group.items) {
+              globalIdx++;
+              const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
+              let ansText = "—";
+              if (a) {
+                let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
+                if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); }
+                else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } }
+              }
+              const qEl = doc.createElement("div");
+              qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${globalIdx % 2 === 0 ? '#f8f8f8' : 'white'};`;
+              qEl.innerHTML = `<div style="display: flex; align-items: flex-start; gap: 10px;">
+                <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${globalIdx}</span>
+                <div style="flex: 1;">
+                  <h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}</h3>
+                  <div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div>
                 </div>
-            `;
-
-            currentPage.appendChild(qEl);
-            const qHeight = qEl.offsetHeight;
-
-            if (currentY + qHeight > 1050) {
-              currentPage.removeChild(qEl);
-              const footer = doc.createElement("div");
-              footer.className = "footer";
-              footer.innerText = "تم الإنشاء بواسطة AEMS - نظام إدارة القياس والتقويم الأكاديمي";
-              currentPage.appendChild(footer);
-
-              currentPage = doc.createElement("div");
-              currentPage.className = "page";
-              container.appendChild(currentPage);
-              currentPage.appendChild(qEl);
-              currentY = 40 + qHeight;
-            } else {
-              currentY += qHeight;
+              </div>`;
+              addElement(qEl);
             }
           }
 
@@ -542,25 +549,27 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       const headerEl = doc.createElement("div"); headerEl.innerHTML = headerHtml; currentPage.appendChild(headerEl);
       let currentY = 40 + headerEl.offsetHeight;
 
-      for (let qi = 0; qi < questions.length; qi++) {
-        const q = questions[qi];
-        const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
-        let ansText = "—";
-        if (a) {
-          let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
-          if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); }
-          else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } }
+      const addEl = (el: HTMLElement) => {
+        currentPage.appendChild(el); const h = el.offsetHeight;
+        if (currentY + h > 1050) { currentPage.removeChild(el); const ft2 = doc.createElement("div"); ft2.className = "footer"; ft2.innerText = "AEMS - نظام إدارة القياس والتقويم الأكاديمي"; currentPage.appendChild(ft2); currentPage = doc.createElement("div"); currentPage.className = "page"; container.appendChild(currentPage); currentPage.appendChild(el); currentY = 40 + h; }
+        else { currentY += h; }
+      };
+      const grp: { cat: string; items: { q: typeof questions[0]; idx: number }[] }[] = [];
+      let curCat = "__none__";
+      questions.forEach((q, qi) => { const c = q.minLabel || ""; if (c !== curCat || grp.length === 0) { grp.push({ cat: c, items: [] }); curCat = c; } grp[grp.length - 1].items.push({ q, idx: qi }); });
+      let gIdx = 0;
+      for (const group of grp) {
+        if (group.cat) { const ce = doc.createElement("div"); ce.style.cssText = "padding: 8px 16px; margin: 12px 0 4px 0; border-bottom: 2px solid #000; border-top: 1px solid #ccc;"; ce.innerHTML = `<h2 style="font-size: 15px; font-weight: 700; color: #000; margin: 0;">${group.cat}</h2>`; addEl(ce); }
+        for (const { q } of group.items) {
+          gIdx++;
+          const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
+          let ansText = "—";
+          if (a) { let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : ""); if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); } else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } } }
+          const qEl = doc.createElement("div");
+          qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${gIdx % 2 === 0 ? '#f8f8f8' : 'white'};`;
+          qEl.innerHTML = `<div style="display: flex; align-items: flex-start; gap: 10px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${gIdx}</span><div style="flex: 1;"><h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}</h3><div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div></div></div>`;
+          addEl(qEl);
         }
-        const qEl = doc.createElement("div");
-        qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${qi % 2 === 0 ? '#f8f8f8' : 'white'};`;
-        const catTag = q.minLabel ? `<span style="display: inline-block; font-size: 9px; border: 1px solid #999; color: #333; padding: 1px 6px; border-radius: 3px; margin-right: 6px;">${q.minLabel}</span>` : '';
-        qEl.innerHTML = `<div style="display: flex; align-items: flex-start; gap: 10px;">
-          <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${qi + 1}</span>
-          <div style="flex: 1;"><h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}${catTag}</h3>
-          <div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div></div></div>`;
-        currentPage.appendChild(qEl);
-        if (currentY + qEl.offsetHeight > 1050) { currentPage.removeChild(qEl); const ft = doc.createElement("div"); ft.className = "footer"; ft.innerText = "AEMS - نظام إدارة القياس والتقويم الأكاديمي"; currentPage.appendChild(ft); currentPage = doc.createElement("div"); currentPage.className = "page"; container.appendChild(currentPage); currentPage.appendChild(qEl); currentY = 40 + qEl.offsetHeight; }
-        else { currentY += qEl.offsetHeight; }
       }
       const ft = doc.createElement("div"); ft.className = "footer"; ft.innerText = "AEMS - نظام إدارة القياس والتقويم الأكاديمي"; currentPage.appendChild(ft);
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -928,33 +937,43 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                         </div>
                       </div>
 
-                      {/* Answers */}
-                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="divide-y divide-gray-100">
-                          {questions.map((q, qi) => {
-                            const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
-                            let ansText = "—";
-                            if (a) {
-                              let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
-                              if (a.selectedOptions && a.selectedOptions.length) { ansText = a.selectedOptions.join("، "); }
-                              else if (valStr) {
-                                ansText = valStr;
-                                if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; }
-                              }
-                            }
-                            return (
-                              <div key={q.$id} className="px-6 py-4 flex items-start gap-4">
-                                <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">{qi + 1}</span>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-gray-800 mb-1.5">{q.text}</p>
-                                  {q.minLabel && <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-md mb-1.5 inline-block">{q.minLabel}</span>}
-                                  <div className={`text-sm px-4 py-2 rounded-xl inline-block ${ansText === "—" ? "bg-gray-50 text-gray-400 italic" : "bg-gradient-to-l from-blue-50 to-indigo-50 text-blue-800 font-medium border border-blue-100"}`}>{ansText}</div>
-                                </div>
+                      {/* Answers grouped by category */}
+                      {(() => {
+                        const groups: { cat: string; items: { q: typeof questions[0]; idx: number }[] }[] = [];
+                        let curCat = "__none__";
+                        questions.forEach((q, qi) => { const c = q.minLabel || ""; if (c !== curCat || groups.length === 0) { groups.push({ cat: c, items: [] }); curCat = c; } groups[groups.length - 1].items.push({ q, idx: qi }); });
+                        let gIdx = 0;
+                        return groups.map((group, gi) => (
+                          <div key={gi} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+                            {group.cat && (
+                              <div className="px-6 py-3 bg-gray-900 text-white border-b border-gray-200">
+                                <h3 className="text-sm font-bold">{group.cat}</h3>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                            )}
+                            <div className="divide-y divide-gray-100">
+                              {group.items.map(({ q }) => {
+                                gIdx++;
+                                const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
+                                let ansText = "—";
+                                if (a) {
+                                  let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
+                                  if (a.selectedOptions && a.selectedOptions.length) { ansText = a.selectedOptions.join("، "); }
+                                  else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } }
+                                }
+                                return (
+                                  <div key={q.$id} className="px-6 py-4 flex items-start gap-4">
+                                    <span className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">{gIdx}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-semibold text-gray-800 mb-1.5">{q.text}</p>
+                                      <div className={`text-sm px-4 py-2 rounded-xl inline-block ${ansText === "—" ? "bg-gray-50 text-gray-400 italic" : "bg-gray-50 text-gray-900 font-medium border border-gray-200"}`}>{ansText}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
+                      })()}
                     </div>
                   );
                 })()}
