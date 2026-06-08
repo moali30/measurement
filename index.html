@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <!-- ============== الجزء 1: إعدادات الصفحة والمكتبات الخارجية ============== -->
+    
+    <!-- البيانات الوصفية الأساسية -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل الاستبيانات الأكاديمي</title>
+
+    <!-- استيراد الخطوط من Google Fonts لتحسين جمالية النص -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- -- تعديل: إضافة مكتبة Font Awesome للأيقونات -- -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- استيراد مكتبات JavaScript من شبكات توصيل المحتوى (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- ============== نهاية الجزء 1 ============== -->
+    
+    <!-- ============== الجزء 2: أنماط CSS لتصميم الواجهة ============== -->
+    <style>
+        /* -- تعديل: إضافة متغيرات للوضع الليلي وتحسينات بصرية -- */
+        :root {
+            --primary-color: #1a237e;
+            --secondary-color: #3949ab;
+            --accent-color: #7986cb;
+            --light-color: #e8eaf6;
+            --dark-color: #0d1451;
+            --success-color: #2e7d32;
+            --warning-color: #f9a825;
+            --danger-color: #c62828;
+            --text-color: #212121;
+            --background-color: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            --container-bg: white;
+            --border-color: #ddd;
+            --shadow: 0 4px 12px rgba(0,0,0,0.1);
+            --gradient-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .dark-mode {
+            --primary-color: #7986cb;
+            --secondary-color: #5c6bc0;
+            --accent-color: #9fa8da;
+            --light-color: #2c3e50;
+            --dark-color: #e0e0e0;
+            --success-color: #66bb6a;
+            --warning-color: #ffa726;
+            --danger-color: #ef5350;
+            --text-color: #ecf0f1;
+            --background-color: #141e30;
+            --container-bg: #1d2b3e;
+            --border-color: #4a4a4a;
+            --shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        
+        body {
+            font-family: 'Cairo', sans-serif;
+            color: var(--text-color);
+            background: var(--background-color);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .app-header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: var(--container-bg);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .header-content {
+            flex-grow: 1;
+        }
+
+        .app-title {
+            font-family: 'Amiri', serif;
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            background: var(--gradient-bg);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .app-subtitle {
+            font-size: 1.2rem;
+            color: var(--secondary-color);
+            opacity: 0.9;
+        }
+        
+        .container {
+            background: var(--container-bg);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .container:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        
+        .section-title {
+            font-family: 'Amiri', serif;
+            font-size: 1.8rem;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .section-title i {
+            font-size: 1.5rem;
+        }
+
+        .section-title::before {
+            content: "";
+            width: 4px;
+            height: 30px;
+            background: var(--gradient-bg);
+            border-radius: 2px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark-color);
+            font-size: 1.1rem;
+        }
+
+        label i {
+            color: var(--secondary-color);
+        }
+        
+        input[type="text"],
+        input[type="date"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            font-family: 'Cairo', sans-serif;
+            font-size: 1rem;
+            background-color: var(--light-color);
+            color: var(--text-color);
+        }
+        
+        input[type="text"]:focus,
+        input[type="date"]:focus,
+        textarea:focus,
+        select:focus {
+            border-color: var(--secondary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--secondary-color) 20%, transparent);
+            transform: translateY(-1px);
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .file-upload-section {
+            background-color: color-mix(in srgb, var(--accent-color) 10%, transparent);
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px dashed var(--accent-color);
+        }
+        
+        .file-upload-section:hover {
+            border-color: var(--secondary-color);
+            background-color: color-mix(in srgb, var(--accent-color) 20%, transparent);
+        }
+        
+        .file-upload {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .file-upload-btn {
+            border: 2px solid var(--secondary-color);
+            color: var(--secondary-color);
+            background: transparent;
+            padding: 15px 25px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+        }
+        
+        .file-upload-btn:hover {
+            background: var(--secondary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px color-mix(in srgb, var(--secondary-color) 30%, transparent);
+        }
+        
+        .file-upload input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .upload-status-container {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+        
+        .upload-status-text {
+            font-size: 0.9rem;
+            color: var(--success-color);
+            margin-right: 10px;
+            padding: 5px 12px;
+            background: color-mix(in srgb, var(--success-color) 10%, transparent);
+            border-radius: 20px;
+        }
+        
+        .upload-status {
+            font-size: 1.2rem;
+            color: var(--success-color);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 30px;
+            background: var(--gradient-bg);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .btn-success { background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); }
+        .btn-danger { background: linear-gradient(135deg, #f44336 0%, #c62828 100%); }
+        .btn-warning { background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); }
+        .btn-info { background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); }
+        .btn-print { background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%); font-size: 1.1rem; padding: 18px 35px; }
+        
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 30px 0;
+            gap: 10px;
+        }
+        
+        .axes-section {
+            background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+            padding: 25px;
+            border-radius: 15px;
+            border-right: 4px solid var(--primary-color);
+        }
+        
+        .axis-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: var(--container-bg);
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .axis-input { flex: 1; margin-left: 15px; }
+        .axis-range { display: flex; align-items: center; margin: 0 15px; gap: 10px; }
+        .axis-range input { width: 70px; text-align: center; }
+        
+        .remove-axis {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 15px;
+            cursor: pointer;
+        }
+        
+        .remove-axis:hover { background: color-mix(in srgb, var(--danger-color) 80%, black); transform: scale(1.05); }
+        
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 1.2rem;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* -- إضافة: أنماط مفتاح الوضع الليلي -- */
+        .theme-switch-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        .theme-switch {
+            display: inline-block;
+            height: 34px;
+            position: relative;
+            width: 60px;
+        }
+        .theme-switch input {
+            display:none;
+        }
+        .slider {
+            background-color: #ccc;
+            bottom: 0;
+            cursor: pointer;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+            transition: .4s;
+        }
+        .slider:before {
+            background-color: #fff;
+            bottom: 4px;
+            content: "";
+            height: 26px;
+            left: 4px;
+            position: absolute;
+            transition: .4s;
+            width: 26px;
+        }
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .slider.round {
+            border-radius: 34px;
+        }
+        .slider.round:before {
+            border-radius: 50%;
+        }
+        
+        /* ============== نهاية الجزء 2 ============== */
+
+        /* ============== الجزء 3: أنماط التقرير والطباعة ============== */
+        
+        .report-container {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .report-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            box-shadow: var(--shadow);
+            background: white;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-content {
+            flex-grow: 1;
+        }
+        
+        .cover-page {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .logos-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+        
+        .logo { max-width: 120px; max-height: 120px; object-fit: contain; margin: 0 15px; }
+        
+        .cover-title {
+            font-size: 36px;
+            margin: 40px 0;
+            color: #1a237e;
+            line-height: 1.4;
+            font-family: 'Amiri', serif;
+        }
+        
+        .cover-dates {
+            margin-top: 50px;
+            font-size: 18px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            color: #212121;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #1a237e;
+            color: #212121;
+        }
+        
+        .header-logo-left, .header-logo-right { display: flex; align-items: center; width: 100px; }
+        .header-logo-left { justify-content: flex-end; }
+        .header-logo-right { justify-content: flex-start; }
+        .header-logo { max-width: 60px; max-height: 60px; object-fit: contain; }
+        .header-title { flex-grow: 1; text-align: center; font-family: 'Amiri', serif; color: #1a237e; }
+        .header-title h3 { font-size: 20px; margin: 0 0 5px 0; color: #1a237e; }
+        .header-title p { font-size: 16px; margin: 0; color: #666; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; color: #212121; }
+        th, td { padding: 12px; text-align: center; border: 1px solid #ddd; }
+        th { background-color: #e8eaf6; font-weight: bold; color: #1a237e; }
+        
+        .report-footer {
+            margin-top: auto;
+            text-align: center;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            color: #212121;
+            /* -- تعديل: إضافة هذا السطر لمنع كسر الفوتر -- */
+            page-break-inside: avoid !important;
+        }
+        
+        .footer-text { flex: 1; text-align: center; }
+        .signature-area { flex: 1; text-align: center; }
+        .signature-image { max-width: 80px; height: auto; display: block; margin: 0 auto; }
+        
+        .chart-container { width: 100%; height: 250px; margin: 20px 0; position: relative; }
+        .modern-chart-container { width: 100%; height: 300px; margin: 20px auto; position: relative; }
+        
+        .chart-legend { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 20px; color: #212121;}
+        .legend-item { display: flex; align-items: center; margin: 5px 15px; }
+        .legend-color { width: 15px; height: 15px; border-radius: 3px; margin-left: 8px; }
+        
+        .detailed-analysis, .manual-comment, .axis-comment { padding: 20px; border-radius: 12px; margin: 20px 0; color: #212121;}
+        .detailed-analysis { background-color: #e8f5e9; border-right: 4px solid #2e7d32; }
+        .manual-comment { background-color: #fff8e1; border-right: 4px solid #f9a825; }
+        .axis-comment { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-right: 4px solid #1a237e; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        .axis-performance { display: flex; justify-content: space-between; margin: 10px 0; padding: 10px; background-color: #f5f5f5; border-radius: 6px; }
+        .performance-bar { height: 10px; background-color: #e0e0e0; border-radius: 5px; margin-top: 5px; overflow: hidden; }
+        .performance-fill { height: 100%; border-radius: 5px; }
+        
+        /* ============== نهاية الجزء 3 ============== */
+
+        /* ============== الجزء 4: أنماط خاصة بالطباعة والتجاوب مع الشاشات ============== */
+        
+        /* -- تم حذف قسم @media print بالكامل من هنا لأنه يتعارض مع وظيفة زر الطباعة -- */
+        
+        @media (max-width: 768px) {
+            .main-container { padding: 10px; }
+            .app-header { flex-direction: column; gap: 20px; }
+            .app-title { font-size: 2rem; }
+            .container { padding: 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .axis-row { flex-direction: column; gap: 10px; align-items: stretch; }
+            .axis-range { margin: 10px 0; }
+            .actions { flex-direction: column; }
+            .btn { width: 100%; margin: 5px 0; }
+        }
+    </style>
+    <!-- ============== نهاية الجزء 4 ============== -->
+</head>
+<body>
+    <!-- ============== الجزء 5: هيكل الصفحة (HTML) ============== -->
+    <div class="main-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-title">تحليل الاستبيانات الأكاديمي</h1>
+                <p class="app-subtitle">نظام متقدم لتحليل البيانات وإنشاء التقارير الأكاديمية</p>
+            </div>
+            <!-- -- إضافة: مفتاح تبديل الوضع الليلي -- -->
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="checkbox">
+                    <input type="checkbox" id="checkbox" />
+                    <div class="slider round"></div>
+                </label>
+            </div>
+        </header>
+        
+        <section class="container">
+            <!-- -- تعديل: إضافة أيقونات للعناوين -- -->
+            <h2 class="section-title"><i class="fas fa-file-invoice"></i> البيانات الأساسية</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="dataFile"><i class="fas fa-file-upload"></i> رفع ملف البيانات (Excel/CSV/JSON)</label>
+                    <div class="file-upload-section">
+                        <div class="file-upload">
+                            <button class="file-upload-btn"><i class="fas fa-folder-open"></i> اختر ملف البيانات</button>
+                            <input type="file" id="dataFile" accept=".xlsx,.xls,.csv,.json">
+                        </div>
+                        <div id="fileName" class="upload-status-container"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="reportTitle"><i class="fas fa-file-signature"></i> عنوان التقرير</label>
+                    <input type="text" id="reportTitle" placeholder="أدخل عنوان التقرير">
+                </div>
+                <div class="form-group">
+                    <label for="surveyDate"><i class="fas fa-calendar-alt"></i> تاريخ طرح الاستبيان</label>
+                    <input type="date" id="surveyDate">
+                </div>
+                <div class="form-group">
+                    <label for="reportDate"><i class="fas fa-calendar-check"></i> تاريخ إعداد التقرير</label>
+                    <input type="date" id="reportDate">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="manualComment"><i class="fas fa-pencil-alt"></i> ملاحظات إضافية (يدوي)</label>
+                <textarea id="manualComment" placeholder="أدخل أي ملاحظات إضافية هنا"></textarea>
+            </div>
+        </section>
+        
+        <section class="container">
+            <h2 class="section-title"><i class="fas fa-cogs"></i> إعدادات المحاور</h2>
+            <div class="axes-section">
+                <div id="axesContainer"></div>
+                <button id="addAxis" class="btn" style="margin-top: 15px;"><i class="fas fa-plus"></i> إضافة محور جديد</button>
+            </div>
+        </section>
+        
+        <section class="container">
+            <h2 class="section-title"><i class="fas fa-image"></i> الشعارات والتوقيع</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label><i class="fas fa-award"></i> شعار الجودة</label>
+                    <div class="file-upload-section">
+                        <div class="file-upload">
+                            <button class="file-upload-btn"><i class="fas fa-upload"></i> رفع الشعار</button>
+                            <input type="file" id="qualityLogo" accept="image/*">
+                        </div>
+                        <div class="upload-status-container">
+                            <span id="qualityLogoStatus" class="upload-status-text">لم يتم الرفع</span>
+                            <span id="qualityLogoIndicator" class="upload-status"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-university"></i> شعار الجامعة</label>
+                    <div class="file-upload-section">
+                        <div class="file-upload">
+                            <button class="file-upload-btn"><i class="fas fa-upload"></i> رفع الشعار</button>
+                            <input type="file" id="universityLogo" accept="image/*">
+                        </div>
+                        <div class="upload-status-container">
+                            <span id="universityLogoStatus" class="upload-status-text">لم يتم الرفع</span>
+                            <span id="universityLogoIndicator" class="upload-status"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-graduation-cap"></i> شعار الكلية</label>
+                    <div class="file-upload-section">
+                        <div class="file-upload">
+                             <button class="file-upload-btn"><i class="fas fa-upload"></i> رفع الشعار</button>
+                            <input type="file" id="collegeLogo" accept="image/*">
+                        </div>
+                        <div class="upload-status-container">
+                            <span id="collegeLogoStatus" class="upload-status-text">لم يتم الرفع</span>
+                            <span id="collegeLogoIndicator" class="upload-status"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-signature"></i> صورة التوقيع</label>
+                    <div class="file-upload-section">
+                        <div class="file-upload">
+                             <button class="file-upload-btn"><i class="fas fa-upload"></i> رفع التوقيع</button>
+                            <input type="file" id="signatureImage" accept="image/*">
+                        </div>
+                        <div class="upload-status-container">
+                            <span id="signatureStatus" class="upload-status-text">لم يتم الرفع</span>
+                            <span id="signatureIndicator" class="upload-status"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- -- تعديل: إضافة أيقونات للأزرار -- -->
+        <section class="actions">
+            <button id="generateReport" class="btn"><i class="fas fa-sync-alt"></i> إنشاء التقرير</button>
+            <button id="printReport" class="btn btn-print" disabled><i class="fas fa-print"></i> طباعة التقرير</button>
+            <button id="exportPDF" class="btn btn-success" disabled><i class="fas fa-file-pdf"></i> تصدير PDF</button>
+            <button id="exportPNG" class="btn btn-warning" disabled><i class="fas fa-file-image"></i> تصدير PNG</button>
+            <button id="saveJSON" class="btn btn-info" disabled><i class="fas fa-save"></i> حفظ الإعدادات</button>
+            <button id="loadJSON" class="btn btn-danger"><i class="fas fa-folder-upload"></i> تحميل الإعدادات</button>
+        </section>
+        
+        <div class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">جاري معالجة البيانات وإنشاء التقرير...</div>
+        </div>
+        
+        <div id="reportContainer" class="report-container"></div>
+    </div>
+    <!-- ============== نهاية الجزء 5 ============== -->
+
+    <!-- ============== الجزء 6: المنطق البرمجي (JavaScript) ============== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const dataFileInput = document.getElementById('dataFile');
+            const generateReportBtn = document.getElementById('generateReport');
+            const printReportBtn = document.getElementById('printReport');
+            const exportPDFBtn = document.getElementById('exportPDF');
+            const exportPNGBtn = document.getElementById('exportPNG');
+            const saveJSONBtn = document.getElementById('saveJSON');
+            const loadJSONBtn = document.getElementById('loadJSON');
+            const reportContainer = document.getElementById('reportContainer');
+            const fileNameDisplay = document.getElementById('fileName');
+            const loadingElement = document.querySelector('.loading');
+            const axesContainer = document.getElementById('axesContainer');
+            const addAxisBtn = document.getElementById('addAxis');
+            
+            const qualityLogoStatus = document.getElementById('qualityLogoStatus');
+            const universityLogoStatus = document.getElementById('universityLogoStatus');
+            const collegeLogoStatus = document.getElementById('collegeLogoStatus');
+            const signatureStatus = document.getElementById('signatureStatus');
+            const qualityLogoIndicator = document.getElementById('qualityLogoIndicator');
+            const universityLogoIndicator = document.getElementById('universityLogoIndicator');
+            const collegeLogoIndicator = document.getElementById('collegeLogoIndicator');
+            const signatureIndicator = document.getElementById('signatureIndicator');
+            const themeSwitch = document.getElementById('checkbox');
+
+            let reportData = {
+                title: '', surveyDate: '', reportDate: '', results: [],
+                resultsForAnalysis: [], overallAverage: 0, axes: [], autoComment: '',
+                manualComment: '', logos: { quality: '', university: '', college: '' },
+                signature: ''
+            };
+
+            function addAxisRow(axis = { name: '', start: 1, end: 1 }) {
+                const axisRow = document.createElement('div');
+                axisRow.className = 'axis-row';
+                axisRow.innerHTML = `
+                    <input type="text" class="axis-input" placeholder="اسم المحور" value="${axis.name || ''}">
+                    <div class="axis-range">
+                        <span>من السؤال</span>
+                        <input type="number" min="1" value="${axis.start || 1}" class="axis-start">
+                        <span>إلى</span>
+                        <input type="number" min="1" value="${axis.end || 1}" class="axis-end">
+                    </div>
+                    <button class="remove-axis"><i class="fas fa-trash-alt"></i></button>
+                `;
+                axisRow.querySelector('.remove-axis').addEventListener('click', () => axisRow.remove());
+                axesContainer.appendChild(axisRow);
+            }
+
+            function gatherAxesData() {
+                const axes = [];
+                axesContainer.querySelectorAll('.axis-row').forEach(row => {
+                    const name = row.querySelector('.axis-input').value;
+                    const start = parseInt(row.querySelector('.axis-start').value);
+                    const end = parseInt(row.querySelector('.axis-end').value);
+                    if (name && !isNaN(start) && !isNaN(end) && start <= end) {
+                        axes.push({ name, start, end });
+                    }
+                });
+                return axes;
+            }
+
+            function handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (!file) {
+                    alert('يرجى رفع ملف البيانات أولاً');
+                    return;
+                }
+                loadingElement.style.display = 'flex';
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        let data;
+                        const extension = file.name.split('.').pop().toLowerCase();
+                        
+                        if (extension === 'json') {
+                            data = JSON.parse(event.target.result);
+                        } else if (extension === 'csv') {
+                            data = Papa.parse(event.target.result, { header: true, skipEmptyLines: true, dynamicTyping: true }).data;
+                        } else if (['xlsx', 'xls'].includes(extension)) {
+                            const workbook = XLSX.read(event.target.result, { type: 'binary' });
+                            const firstSheet = workbook.SheetNames[0];
+                            data = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                        } else {
+                            throw new Error('صيغة الملف غير مدعومة. يرجى استخدام Excel أو CSV أو JSON');
+                        }
+                        
+                        processData(data);
+                        generateReportHTML();
+                        toggleActionButtons(false);
+                        
+                    } catch (error) {
+                        console.error('Error processing file:', error);
+                        alert('حدث خطأ في معالجة الملف: ' + error.message);
+                    } finally {
+                        loadingElement.style.display = 'none';
+                    }
+                };
+                
+                if (file.name.endsWith('.json') || file.type === 'application/json') {
+                    reader.readAsText(file);
+                } else if (file.name.endsWith('.csv') || file.type === 'text/csv') {
+                    reader.readAsText(file, 'UTF-8');
+                } else {
+                    reader.readAsBinaryString(file);
+                }
+            }
+
+            function processData(data) {
+                // -- إصلاح: التأكد من أن 'data' ليست فارغة قبل محاولة الوصول إلى data[0] --
+                if (!data || data.length === 0) {
+                     reportData.results = [];
+                     reportData.resultsForAnalysis = [];
+                     reportData.overallAverage = 0;
+                     reportData.autoComment = generateAutoComment([], 0); // استدعاء مع بيانات فارغة
+                     return; // إيقاف المعالجة
+                }
+
+                const questions = Object.keys(data[0] || {});
+                const results = [];
+                
+                questions.forEach((question, index) => {
+                    const answers = data.map(row => parseFloat(row[question]) || 0);
+                    const sum = answers.reduce((a, b) => a + b, 0);
+                    const count = answers.length;
+                    const mean = count > 0 ? sum / count : 0;
+                    const relativeWeight = count > 0 ? (sum / (count * 5)) * 100 : 0;
+                    
+                    let questionNumber = index + 1;
+                    const numberMatch = question.match(/^(\d+)[.)\s]/); 
+                    if (numberMatch) {
+                        questionNumber = parseInt(numberMatch[1]);
+                    }
+                    
+                    results.push({
+                        question, questionNumber, count,
+                        mean: parseFloat(mean.toFixed(2)),
+                        relativeWeight: parseFloat(relativeWeight.toFixed(2))
+                    });
+                });
+                
+                results.sort((a, b) => a.questionNumber - b.questionNumber);
+                
+                const resultsForAnalysis = [...results].sort((a, b) => b.relativeWeight - a.relativeWeight);
+                
+                let currentRank = 1;
+                resultsForAnalysis.forEach((item, index) => {
+                    if (index > 0 && item.relativeWeight < resultsForAnalysis[index - 1].relativeWeight) {
+                        currentRank = index + 1;
+                    }
+                    item.rank = currentRank;
+                });
+                
+                const totalRelativeWeight = results.reduce((sum, item) => sum + item.relativeWeight, 0);
+                
+                reportData.results = results;
+                reportData.resultsForAnalysis = resultsForAnalysis;
+                reportData.overallAverage = parseFloat((results.length > 0 ? totalRelativeWeight / results.length : 0).toFixed(2));
+                
+                if (reportData.axes.length > 0) {
+                    processAxesAverages();
+                }
+                
+                reportData.autoComment = generateAutoComment(resultsForAnalysis, reportData.overallAverage);
+            }
+            
+            function processAxesAverages() {
+                reportData.axes.forEach(axis => {
+                    const axisQuestions = reportData.results.filter(item => item.questionNumber >= axis.start && item.questionNumber <= axis.end);
+                    const totalWeight = axisQuestions.reduce((sum, item) => sum + item.relativeWeight, 0);
+                    axis.average = parseFloat((axisQuestions.length > 0 ? totalWeight / axisQuestions.length : 0).toFixed(2));
+                    axis.count = axisQuestions.length;
+                });
+                
+                reportData.axes.sort((a, b) => b.average - a.average);
+                
+                let currentRank = 1;
+                reportData.axes.forEach((axis, index) => {
+                    if (index > 0 && axis.average < reportData.axes[index-1].average) {
+                        currentRank = index + 1;
+                    }
+                    axis.rank = currentRank;
+                });
+            }
+
+            function generateAutoComment(results, average) {
+                // -- إصلاح: إضافة تحقق للتعامل مع ملف بيانات فارغ --
+                if (!results || results.length === 0) {
+                    return `<div class="detailed-analysis">
+                                <h4><i class="fas fa-chart-line"></i> تحليل النتائج</h4>
+                                <p>لم يتم العثور على بيانات أسئلة صالحة للتحليل. يرجى التأكد من أن الملف يحتوي على بيانات.</p>
+                            </div>`;
+                }
+
+                const highest = results[0];
+                const lowest = results[results.length - 1];
+                const strengths = results.filter(r => r.relativeWeight >= 85).map(r => r.questionNumber);
+                const weaknesses = results.filter(r => r.relativeWeight < 70).map(r => r.questionNumber);
+                
+                let perfComment = average >= 85 ? 'أداء متميز' : average >= 70 ? 'أداء جيد' : 'أداء يحتاج إلى تحسين';
+                let comment = `<div class="detailed-analysis"><h4><i class="fas fa-chart-line"></i> تحليل النتائج</h4>
+                    <p>بلغ المتوسط العام ${average}% مما يشير إلى ${perfComment}.</p>
+                    <p>أعلى سؤال تقييماً هو "${highest.question}" (رقم ${highest.questionNumber}) بنسبة ${highest.relativeWeight}%.</p>
+                    <p>أقل سؤال تقييماً هو "${lowest.question}" (رقم ${lowest.questionNumber}) بنسبة ${lowest.relativeWeight}%.</p>`;
+                if (strengths.length > 0) comment += `<p><b><i class="fas fa-thumbs-up"></i> نقاط القوة (أعلى من 85%):</b> الأسئلة ${strengths.slice(0, 5).join(', ')}.</p>`;
+                if (weaknesses.length > 0) comment += `<p><b><i class="fas fa-tools"></i> نقاط تحتاج لتحسين (أقل من 70%):</b> الأسئلة ${weaknesses.slice(0, 5).join(', ')}.</p>`;
+                
+                // -- تعديل: إضافة تحليل المحاور المفصل والتعليق عليها --
+                let axisAnalysis = '';
+                // التأكد من أن المحاور موجودة وتم حساب متوسطها
+                if (reportData.axes.length > 0 && reportData.axes[0].average !== undefined) {
+                    const highestAxis = reportData.axes[0];
+                    const lowestAxis = reportData.axes[reportData.axes.length - 1];
+                    
+                    axisAnalysis = `
+                    <div class="detailed-analysis" style="background-color: color-mix(in srgb, var(--primary-color) 5%, transparent); border-right-color: var(--primary-color);">
+                        <h4><i class="fas fa-sitemap"></i> تحليل مفصل للمحاور</h4>
+                        <p>بناءً على تحليل المحاور المحددة، تظهر النتائج التالية لأعلى محور وأقل محور:</p>
+                        
+                        <div class="axis-performance">
+                            <div>
+                                <strong>${highestAxis.name}</strong>
+                                <div>متوسط الوزن النسبي: ${highestAxis.average.toFixed(2)}%</div>
+                            </div>
+                            <div>الترتيب: ${highestAxis.rank}</div>
+                        </div>
+                        <div class="performance-bar">
+                            <div class="performance-fill" style="width: ${highestAxis.average}%; background-color: var(--success-color);"></div>
+                        </div>
+                        
+                        <div class="axis-performance">
+                            <div>
+                                <strong>${lowestAxis.name}</strong>
+                                <div>متوسط الوزن النسبي: ${lowestAxis.average.toFixed(2)}%</div>
+                            </div>
+                            <div>الترتيب: ${lowestAxis.rank}</div>
+                        </div>
+                        <div class="performance-bar">
+                            <div class="performance-fill" style="width: ${lowestAxis.average}%; background-color: var(--danger-color);"></div>
+                        </div>
+                        
+                        <div class="axis-comment">
+                            <h5><i class="fas fa-comment-dots"></i> ملاحظات على المحاور:</h5>
+                            <p>محور "${highestAxis.name}" ${generateAxisComment(highestAxis.average)}.</p>
+                            <p>محور "${lowestAxis.name}" ${generateAxisComment(lowestAxis.average)}.</p>
+                        </div>
+                    </div>
+                    `;
+                }
+                comment += axisAnalysis;
+                // -- نهاية الإضافة --
+
+                comment += '</div>';
+                return comment;
+            }
+
+            // -- إضافة: دالة لإنشاء تعليق وصفي للمحور بناءً على متوسطه --
+            function generateAxisComment(average) {
+                if (average >= 90) {
+                    return "يظهر أداء استثنائي ومتفوق يتجاوز التوقعات";
+                } else if (average >= 80) {
+                    return "يظهر أداء متميز وجيد جداً";
+                } else if (average >= 70) {
+                    return "يظهر أداء جيد ولكن هناك مجال للتحسين";
+                } else if (average >= 60) {
+                    return "يظهر أداء مقبول ولكن يحتاج إلى تحسين";
+                } else {
+                    return "يظهر أداء أقل من المطلوب ويحتاج إلى تحسين عاجل";
+                }
+            }
+            // -- نهاية الإضافة --
+
+            function generateReportHTML() {
+                reportContainer.innerHTML = '';
+                reportContainer.style.display = 'block';
+                
+                createCoverPage();
+                createTablePages();
+                if (reportData.axes.length > 0) createAxesPages();
+                createChartsPage();
+                createCommentsPage();
+            }
+
+            function createCoverPage() {
+                const page = createReportPage();
+                page.classList.add('cover-page');
+                page.innerHTML = `
+                    <div class="logos-container">
+                        ${reportData.logos.quality ? `<img src="${reportData.logos.quality}" class="logo">` : '<div></div>'}
+                        ${reportData.logos.university ? `<img src="${reportData.logos.university}" class="logo">` : '<div></div>'}
+                        ${reportData.logos.college ? `<img src="${reportData.logos.college}" class="logo">` : '<div></div>'}
+                    </div>
+                    <h1 class="cover-title">${reportData.title}</h1>
+                    <div class="cover-dates">
+                        <div>تاريخ طرح الاستبيان: ${formatDate(reportData.surveyDate)}</div>
+                        <div>تاريخ إعداد التقرير: ${formatDate(reportData.reportDate)}</div>
+                    </div>`;
+                reportContainer.appendChild(page);
+            }
+
+            function createTablePages() {
+                let remainingResults = [...reportData.results];
+                let pageCounter = 1;
+                const FOOTER_RESERVED_SPACE = 220; // تم زيادة المساحة المحجوزة
+
+                // -- إصلاح: التأكد من عدم إنشاء صفحة جدول إذا كانت النتائج فارغة --
+                if (remainingResults.length === 0) {
+                    return; 
+                }
+
+                while (remainingResults.length > 0) {
+                    const page = createReportPage();
+                    const headerElement = document.createElement('div');
+                    headerElement.innerHTML = createPageHeader(`نتائج تحليل الاستبيان - صفحة ${pageCounter}`);
+                    
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'page-content';
+
+                    const table = createTable(
+                        ['م', 'السؤال', 'العدد', 'المتوسط', 'الوزن النسبي (%)', 'الترتيب'], [] 
+                    );
+                    const tbody = table.querySelector('tbody');
+                    contentDiv.appendChild(table);
+
+                    page.appendChild(headerElement);
+                    page.appendChild(contentDiv);
+                    reportContainer.appendChild(page);
+
+                    const maxTableHeight = page.offsetHeight - headerElement.offsetHeight - FOOTER_RESERVED_SPACE;
+
+                    let rowsAddedCount = 0;
+                    for (const item of remainingResults) {
+                        const rowData = [item.questionNumber, item.question, item.count, item.mean, `${item.relativeWeight}%`, item.rank];
+                        const tr = tbody.insertRow();
+                        rowData.forEach(cellData => {
+                            const cell = tr.insertCell();
+                            cell.textContent = cellData;
+                        });
+                        
+                        if (table.offsetHeight > maxTableHeight && rowsAddedCount > 0) {
+                           tbody.deleteRow(-1);
+                           break; 
+                        }
+                        rowsAddedCount++;
+                    }
+                    
+                    remainingResults.splice(0, rowsAddedCount);
+
+                    if (remainingResults.length === 0) {
+                        const overallDiv = document.createElement('div');
+                        overallDiv.style.cssText = 'text-align: left; margin-top: 20px; font-weight: bold; color: #212121;';
+                        overallDiv.textContent = `المتوسط العام: ${reportData.overallAverage}%`;
+                        contentDiv.appendChild(overallDiv);
+                    }
+                    
+                    addFooterToPage(page);
+                    pageCounter++;
+                }
+            }
+            
+            function createAxesPages() {
+                let remainingAxes = [...reportData.axes];
+                let pageCounter = 1;
+                const FOOTER_RESERVED_SPACE = 220; // تم زيادة المساحة المحجوزة
+
+                while (remainingAxes.length > 0) {
+                    const page = createReportPage();
+                    const headerElement = document.createElement('div');
+                    headerElement.innerHTML = createPageHeader(`نتائج تحليل المحاور - صفحة ${pageCounter}`);
+                    
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'page-content';
+
+                    const table = createTable(
+                        ['المحور', 'نطاق الأسئلة', 'عدد الأسئلة', 'المتوسط (%)', 'الترتيب'], []
+                    );
+                    const tbody = table.querySelector('tbody');
+                    contentDiv.appendChild(table);
+
+                    page.appendChild(headerElement);
+                    page.appendChild(contentDiv);
+                    reportContainer.appendChild(page);
+
+                    const maxTableHeight = page.offsetHeight - headerElement.offsetHeight - FOOTER_RESERVED_SPACE;
+
+                    let rowsAddedCount = 0;
+                    for (const axis of remainingAxes) {
+                        const rowData = [axis.name, `من ${axis.start} إلى ${axis.end}`, axis.count, `${axis.average}%`, axis.rank];
+                        const tr = tbody.insertRow();
+                        rowData.forEach(cellData => {
+                            const cell = tr.insertCell();
+                            cell.textContent = cellData;
+                        });
+
+                        if (table.offsetHeight > maxTableHeight && rowsAddedCount > 0) {
+                           tbody.deleteRow(-1);
+                           break;
+                        }
+                        rowsAddedCount++;
+                    }
+                    
+                    remainingAxes.splice(0, rowsAddedCount);
+                    addFooterToPage(page);
+                    pageCounter++;
+                }
+
+                const chartPage = createReportPage();
+                const chartContent = document.createElement('div');
+                chartContent.className = 'page-content';
+                chartContent.innerHTML = `
+                    ${createPageHeader('مقارنة بين المحاور')}
+                    <div class="chart-wrapper">
+                         <div class="chart-container" style="height: 500px;"><canvas id="axesBarChart"></canvas></div>
+                    </div>
+                `;
+                chartPage.appendChild(chartContent);
+                addFooterToPage(chartPage);
+                reportContainer.appendChild(chartPage);
+                setTimeout(() => createAxesBarChart(), 100);
+            }
+
+            function createChartsPage() {
+                // -- إصلاح: عدم إنشاء صفحة رسوم بيانية إذا كانت النتائج فارغة --
+                if (reportData.results.length === 0) {
+                    return;
+                }
+
+                const page = createReportPage();
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'page-content';
+                contentDiv.innerHTML = `
+                    ${createPageHeader('الرسوم البيانية')}
+                    <div class="chart-wrapper">
+                        <h4>أعلى 10 أسئلة حسب الوزن النسبي</h4>
+                        <div class="chart-container"><canvas id="barChart"></canvas></div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <h4>توزيع الأوزان النسبية للأسئلة</h4>
+                        <div class="modern-chart-container"><canvas id="pieChart"></canvas><div id="pieLegend" class="chart-legend"></div></div>
+                    </div>
+                `;
+                page.appendChild(contentDiv);
+                addFooterToPage(page);
+                reportContainer.appendChild(page);
+                setTimeout(() => { createBarChart(); createPieChart(); }, 100);
+            }
+
+            function createCommentsPage() {
+                const page = createReportPage();
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'page-content';
+                
+                let content = createPageHeader('تحليل النتائج');
+                content += reportData.autoComment; // يحتوي الآن على تحليل المحاور
+                if (reportData.manualComment) {
+                    content += `<div class="manual-comment"><h4><i class="fas fa-pencil-alt"></i> ملاحظات إضافية</h4><p>${reportData.manualComment.replace(/\n/g, '<br>')}</p></div>`;
+                }
+                contentDiv.innerHTML = content;
+                page.appendChild(contentDiv);
+                addFooterToPage(page);
+                reportContainer.appendChild(page);
+            }
+
+            function createReportPage() { const page = document.createElement('div'); page.className = 'report-page'; return page; }
+            
+            function createPageHeader(subtitle) {
+                return `
+                <div class="page-header">
+                    <div class="header-logo-left">${reportData.logos.quality ? `<img src="${reportData.logos.quality}" class="header-logo">` : ''}</div>
+                    <div class="header-title"><h3>${reportData.title}</h3><p>${subtitle}</p></div>
+                    <div class="header-logo-right">${reportData.logos.college ? `<img src="${reportData.logos.college}" class="header-logo">` : ''}</div>
+                </div>`;
+            }
+            function addFooterToPage(page) {
+                const footer = document.createElement('div');
+                footer.className = 'report-footer';
+                footer.innerHTML = `
+                    <div class="footer-text"><p>إعداد لجنة القياس والتقويم</p></div>
+                    <div class="signature-area">
+                        <p>التوقيع:</p>
+                        ${reportData.signature ? `<img src="${reportData.signature}" class="signature-image">` : `<div style="border-bottom: 1px solid #000; width: 150px; margin: 0 auto;"></div>`}
+                    </div>`;
+                page.appendChild(footer);
+            }
+            function createTable(headers, rowsData) {
+                const table = document.createElement('table');
+                const thead = table.createTHead();
+                const headerRow = thead.insertRow();
+                headers.forEach(text => {
+                    const th = document.createElement('th');
+                    th.textContent = text;
+                    headerRow.appendChild(th);
+                });
+                const tbody = table.createTBody();
+                rowsData.forEach(rowData => {
+                    const row = tbody.insertRow();
+                    rowData.forEach(cellData => {
+                        const cell = row.insertCell();
+                        cell.textContent = cellData;
+                    });
+                });
+                return table;
+            }
+            
+            function createBarChart() {
+                const ctx = document.getElementById('barChart')?.getContext('2d');
+                if (!ctx) return;
+                const top10 = reportData.resultsForAnalysis.slice(0, 10);
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: top10.map(item => `س ${item.questionNumber}`),
+                        datasets: [{ label: 'الوزن النسبي (%)', data: top10.map(item => item.relativeWeight), backgroundColor: 'rgba(54, 162, 235, 0.7)' }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+                });
+            }
+            
+            function createAxesBarChart() {
+                const ctx = document.getElementById('axesBarChart')?.getContext('2d');
+                if (!ctx) return;
+                const sortedAxes = [...reportData.axes].sort((a,b) => b.average - a.average);
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedAxes.map(axis => axis.name),
+                        datasets: [{ label: 'متوسط الوزن النسبي (%)', data: sortedAxes.map(axis => axis.average), backgroundColor: 'rgba(75, 192, 192, 0.7)' }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+                });
+            }
+
+            function createPieChart() {
+                const ctx = document.getElementById('pieChart')?.getContext('2d');
+                if (!ctx) return;
+                const dist = {
+                    high: reportData.results.filter(item => item.relativeWeight >= 80).length,
+                    medium: reportData.results.filter(item => item.relativeWeight >= 60 && item.relativeWeight < 80).length,
+                    low: reportData.results.filter(item => item.relativeWeight < 60).length,
+                };
+                const chart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: [`مرتفع (>=80%)`, `متوسط (60-80%)`, `منخفض (<60%)`],
+                        datasets: [{
+                            data: [dist.high, dist.medium, dist.low],
+                            backgroundColor: ['rgba(76, 175, 80, 0.8)', 'rgba(255, 193, 7, 0.8)', 'rgba(244, 67, 54, 0.8)']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+                
+                const legendContainer = document.getElementById('pieLegend');
+                legendContainer.innerHTML = chart.data.labels.map((label, i) => {
+                    const value = chart.data.datasets[0].data[i];
+                    const total = dist.high + dist.medium + dist.low;
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(0) : 0;
+                    const color = chart.data.datasets[0].backgroundColor[i];
+                    return `<div class="legend-item"><div class="legend-color" style="background-color: ${color}"></div><span>${label}: ${value} (${percentage}%)</span></div>`;
+                }).join('');
+            }
+            
+            async function printReport() {
+                if (reportContainer.style.display === 'none') {
+                    alert('يرجى إنشاء التقرير أولاً');
+                    return;
+                }
+                loadingElement.style.display = 'flex';
+                
+                // استبدال الرسوم البيانية بصور
+                const canvases = reportContainer.querySelectorAll('canvas');
+                const images = [];
+                for (const canvas of canvases) {
+                    const image = new Image();
+                    image.src = canvas.toDataURL('image/png');
+                    images.push({ original: canvas, replacement: image });
+                    canvas.style.display = 'none';
+                    canvas.parentNode.insertBefore(image, canvas.nextSibling);
+                }
+                
+                // الانتظار للحظة لضمان تحميل الصور
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const printFrame = document.createElement('iframe');
+                printFrame.style.cssText = 'position: absolute; width: 0; height: 0; border: 0;';
+                document.body.appendChild(printFrame);
+                
+                const printDoc = printFrame.contentDocument || printFrame.contentWindow.document;
+                
+                // 1. جلب الخطوط
+                const fontLink = document.querySelector('link[href*="fonts.googleapis.com"]').outerHTML;
+                const faLink = document.querySelector('link[href*="font-awesome"]').outerHTML;
+
+                // 2. جلب الأنماط
+                let styles = document.querySelector('style').innerHTML;
+                
+                // 3. إزالة أنماط الشاشات الصغيرة (media query) المتعارضة
+                styles = styles.replace(/@media \(max-width: 768px\) \{[\s\S]*?\}/g, '');
+
+                printDoc.open();
+                printDoc.write(`
+                    <!DOCTYPE html><html lang="ar" dir="rtl"><head><title>طباعة التقرير</title>
+                    ${fontLink}
+                    ${faLink}
+                    <style>${styles}</style>
+                    <style>
+                        @page { 
+                            size: A4; 
+                            margin: 15mm; /* الهوامش الفعلية للطابعة */
+                        } 
+                        body { 
+                            margin: 0; 
+                            padding: 0; 
+                            background: white !important; 
+                            -webkit-print-color-adjust: exact; 
+                            color-adjust: exact; 
+                        } 
+                        .report-page { 
+                            box-shadow: none !important; 
+                            border: none !important; 
+                            margin: 0 !important; 
+                            padding: 0 !important; 
+                            width: 100% !important; 
+                            
+                            min-height: 265mm !important; 
+                            
+                            page-break-after: always; 
+                            display: flex; 
+                            flex-direction: column; 
+                        } 
+                        .report-page:last-of-type { 
+                            page-break-after: auto; 
+                        }
+                        
+                        .page-header, .report-footer, .chart-wrapper, .detailed-analysis, .manual-comment, .axis-comment {
+                            page-break-inside: avoid !important;
+                        }
+                        .report-footer {
+                            margin-top: auto; 
+                            page-break-before: auto; 
+                        }
+                        table {
+                            page-break-inside: auto; 
+                        }
+                        tr {
+                            page-break-inside: avoid; 
+                        }
+
+                        /* إخفاء واجهة التطبيق تماماً داخل الطباعة */
+                        .main-container > *:not(.report-container), .app-header, .container:not(.report-container), .actions, .loading {
+                            display: none !important;
+                        }
+                        .report-container {
+                            display: block !important;
+                            margin: 0 !important;
+                        }
+                        img, .logo, .signature-image { 
+                            max-width: 100% !important; 
+                            height: auto;
+                        }
+
+                        /* --- التعديل النهائي هنا --- */
+                        /* تحديد حجم صورة التوقيع في الطباعة */
+                        .signature-image {
+                            max-width: 80px !important;
+                            height: auto !important;
+                        }
+                        /* --- نهاية التعديل --- */
+
+                    </style>
+                    </head><body>${reportContainer.innerHTML}</body></html>`);
+                printDoc.close();
+                
+                // الانتظار حتى يتم تحميل الإطار بالكامل
+                printFrame.onload = function() {
+                    try {
+                        printFrame.contentWindow.focus();
+                        printFrame.contentWindow.print();
+                    } catch (e) {
+                        console.error("Print failed:", e);
+                        alert("حدث خطأ أثناء محاولة الطباعة.");
+                    } finally {
+                        document.body.removeChild(printFrame);
+                        
+                        // إعادة الرسوم البيانية الأصلية
+                        images.forEach(item => {
+                            item.original.style.display = 'block';
+                            if (item.replacement.parentNode) {
+                                item.replacement.parentNode.removeChild(item.replacement);
+                            }
+                        });
+                        loadingElement.style.display = 'none';
+                    }
+                };
+            }
+
+            async function exportToPDF() {
+                loadingElement.style.display = 'flex';
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pages = document.querySelectorAll('.report-page');
+
+                for (let i = 0; i < pages.length; i++) {
+                    const canvas = await html2canvas(pages[i], { scale: 3, useCORS: true });
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdfWidth = doc.internal.pageSize.getWidth();
+                    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                    if (i > 0) doc.addPage();
+                    doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                }
+                doc.save(`${reportData.title || 'report'}.pdf`);
+                loadingElement.style.display = 'none';
+            }
+            
+            async function exportToPNG() {
+                loadingElement.style.display = 'flex';
+                const canvas = await html2canvas(reportContainer, { scale: 2, useCORS: true });
+                const link = document.createElement('a');
+                link.download = `${reportData.title || 'report'}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                loadingElement.style.display = 'none';
+            }
+
+            function saveStateToJSON() {
+                const dataStr = JSON.stringify(reportData, null, 2);
+                const blob = new Blob([dataStr], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `${reportData.title || 'settings'}.json`;
+                link.href = url;
+                link.click();
+                URL.revokeObjectURL(url);
+            }
+
+            function loadStateFromJSON(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        reportData = data;
+                        document.getElementById('reportTitle').value = reportData.title;
+                        document.getElementById('surveyDate').value = reportData.surveyDate;
+                        document.getElementById('reportDate').value = reportData.reportDate;
+                        document.getElementById('manualComment').value = reportData.manualComment;
+                        axesContainer.innerHTML = '';
+                        reportData.axes.forEach(axis => addAxisRow(axis));
+                        generateReportHTML();
+                        toggleActionButtons(false);
+                    } catch (error) {
+                        alert('ملف JSON غير صالح.');
+                    }
+                };
+                reader.readAsText(file);
+            }
+            
+            function toggleActionButtons(disabled) {
+                printReportBtn.disabled = disabled;
+                exportPDFBtn.disabled = disabled;
+                exportPNGBtn.disabled = disabled;
+                saveJSONBtn.disabled = disabled;
+            }
+
+            function formatDate(dateString) {
+                if (!dateString) return 'N/A';
+                return new Date(dateString).toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+            
+            function handleImageUpload(type, elementId, statusId, indicatorId) {
+                document.getElementById(elementId).addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    const statusEl = document.getElementById(statusId);
+                    const indicatorEl = document.getElementById(indicatorId);
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            if (type === 'signature') {
+                                reportData.signature = event.target.result;
+                            } else {
+                                reportData.logos[type] = event.target.result;
+                            }
+                            statusEl.textContent = 'تم الرفع بنجاح';
+                            indicatorEl.textContent = '✓';
+                            if (reportContainer.style.display !== 'none') generateReportHTML();
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+
+            generateReportBtn.addEventListener('click', () => {
+                reportData.title = document.getElementById('reportTitle').value || 'تقرير تحليل الاستبيان';
+                reportData.surveyDate = document.getElementById('surveyDate').value;
+                reportData.reportDate = document.getElementById('reportDate').value;
+                reportData.manualComment = document.getElementById('manualComment').value;
+                reportData.axes = gatherAxesData();
+                handleFileSelect({ target: { files: [dataFileInput.files[0]] } });
+            });
+            
+            dataFileInput.addEventListener('change', (e) => {
+                 const file = e.target.files[0];
+                 if(file) fileNameDisplay.innerHTML = `<span class="upload-status-text">الملف المحدد: ${file.name}</span><span class="upload-status">✓</span>`;
+            });
+            
+            addAxisBtn.addEventListener('click', () => addAxisRow());
+            printReportBtn.addEventListener('click', printReport);
+            exportPDFBtn.addEventListener('click', exportToPDF);
+            exportPNGBtn.addEventListener('click', exportToPNG);
+            saveJSONBtn.addEventListener('click', saveStateToJSON);
+            loadJSONBtn.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = loadStateFromJSON;
+                input.click();
+            });
+
+            handleImageUpload('quality', 'qualityLogo', 'qualityLogoStatus', 'qualityLogoIndicator');
+            handleImageUpload('university', 'universityLogo', 'universityLogoStatus', 'universityLogoIndicator');
+            handleImageUpload('college', 'collegeLogo', 'collegeLogoStatus', 'collegeLogoIndicator');
+            handleImageUpload('signature', 'signatureImage', 'signatureStatus', 'signatureIndicator');
+            
+            // -- إضافة: منطق تبديل الوضع الليلي --
+            themeSwitch.addEventListener('change', () => {
+                document.body.classList.toggle('dark-mode');
+                if (document.body.classList.contains('dark-mode')) {
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    localStorage.setItem('theme', 'light');
+                }
+            });
+
+            const currentTheme = localStorage.getItem('theme');
+            if (currentTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                themeSwitch.checked = true;
+            }
+
+            document.getElementById('surveyDate').valueAsDate = new Date();
+            document.getElementById('reportDate').valueAsDate = new Date();
+            addAxisRow();
+        });
+    </script>
+    <!-- ============== نهاية الجزء 6 ============== -->
+</body>
+</html>

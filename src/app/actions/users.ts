@@ -1,7 +1,5 @@
 "use server";
-import { Client, Users, ID } from 'node-appwrite';
-
-import { config } from '@/lib/config';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function createUser(data: FormData) {
   const name = data.get("name") as string;
@@ -9,14 +7,19 @@ export async function createUser(data: FormData) {
   const password = data.get("password") as string;
 
   try {
-    const client = new Client()
-      .setEndpoint(config.appwriteUrl)
-      .setProject(config.projectId)
-      .setKey(process.env.APPWRITE_API_KEY || 'standard_2dca5d5f948513772e540167e6ac4e0eb306d46094b624f072d356c7633f07ba6c26e5e34693ecc704e1b2df5eef58feeaf9ac91fe8a441bf53b459feab16d83826afe218c557ef6f9f4ea802b14b6e0247f4481d62791208978afc5f4413177340a72f36f6fcc8fec2853dd6b27afe6a2ff631ae9e5f6c118085f20d03c2aab');
-
-    const users = new Users(client);
+    const supabase = createAdminClient();
     
-    await users.create(ID.unique(), email, undefined, password, name);
+    const { error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name }
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -25,15 +28,23 @@ export async function createUser(data: FormData) {
 
 export async function listUsers() {
   try {
-    const client = new Client()
-      .setEndpoint(config.appwriteUrl)
-      .setProject(config.projectId)
-      .setKey(process.env.APPWRITE_API_KEY || 'standard_2dca5d5f948513772e540167e6ac4e0eb306d46094b624f072d356c7633f07ba6c26e5e34693ecc704e1b2df5eef58feeaf9ac91fe8a441bf53b459feab16d83826afe218c557ef6f9f4ea802b14b6e0247f4481d62791208978afc5f4413177340a72f36f6fcc8fec2853dd6b27afe6a2ff631ae9e5f6c118085f20d03c2aab');
+    const supabase = createAdminClient();
+    
+    // We can list users using the admin API
+    const { data, error } = await supabase.auth.admin.listUsers();
+    
+    if (error) {
+      return { success: false, error: error.message };
+    }
 
-    const users = new Users(client);
-    const result = await users.list();
-    // Only return serializable data
-    return { success: true, users: result.users.map(u => ({ id: u.$id, name: u.name, email: u.email, registration: u.registration })) };
+    const users = data.users.map(u => ({
+      id: u.id,
+      name: u.user_metadata?.name || 'بدون اسم',
+      email: u.email,
+      registration: u.created_at
+    }));
+
+    return { success: true, users };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

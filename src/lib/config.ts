@@ -7,4 +7,9 @@ export const config = {
   storageBucketReports: process.env.NEXT_PUBLIC_APPWRITE_BUCKET_REPORTS || 'pdf_reports',
   storageBucketLogos: process.env.NEXT_PUBLIC_APPWRITE_BUCKET_LOGOS || 'university_logos',
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+  
+  // Supabase Configuration
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 };

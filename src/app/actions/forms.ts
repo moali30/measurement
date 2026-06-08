@@ -1,67 +1,66 @@
 "use server";
-import { Client, Databases, Query, ID } from 'node-appwrite';
-import { config } from '@/lib/config';
-
-const API_KEY = process.env.APPWRITE_API_KEY || 'standard_2dca5d5f948513772e540167e6ac4e0eb306d46094b624f072d356c7633f07ba6c26e5e34693ecc704e1b2df5eef58feeaf9ac91fe8a441bf53b459feab16d83826afe218c557ef6f9f4ea802b14b6e0247f4481d62791208978afc5f4413177340a72f36f6fcc8fec2853dd6b27afe6a2ff631ae9e5f6c118085f20d03c2aab';
-
-function getAdminClient() {
-  return new Client()
-    .setEndpoint(config.appwriteUrl)
-    .setProject(config.projectId)
-    .setKey(API_KEY);
-}
+import { createAdminClient } from '@/lib/supabase/server';
 
 /**
- * Load form data by slug - runs on the server, bypasses CORS.
+ * Load form data by slug
  */
 export async function loadFormBySlug(slug: string) {
   try {
-    const databases = new Databases(getAdminClient());
-    const dbId = config.databaseId;
+    const supabase = createAdminClient();
     const decodedSlug = decodeURIComponent(slug);
 
-    const formsRes = await databases.listDocuments(dbId, "forms", [
-      Query.equal("slug", decodedSlug),
-      Query.limit(1),
-    ]);
+    const { data: forms, error: formError } = await supabase
+      .from('forms')
+      .select('*')
+      .eq('slug', decodedSlug)
+      .limit(1);
 
-    if (formsRes.documents.length === 0) {
+    if (formError) {
+      return { success: false, error: formError.message };
+    }
+
+    if (!forms || forms.length === 0) {
       return { success: false, error: "not_found" };
     }
 
-    const formDoc = formsRes.documents[0];
+    const formDoc = forms[0];
 
     if (formDoc.status !== "active") {
       return { success: false, error: "closed" };
     }
 
     // Load questions
-    const questionsRes = await databases.listDocuments(dbId, "questions", [
-      Query.equal("formId", formDoc.$id),
-      Query.orderAsc("order"),
-      Query.limit(100),
-    ]);
+    const { data: questions, error: questionsError } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('form_id', formDoc.id)
+      .order('order_index', { ascending: true })
+      .limit(100);
+
+    if (questionsError) {
+      return { success: false, error: questionsError.message };
+    }
 
     return {
       success: true,
       form: {
-        $id: formDoc.$id,
+        $id: formDoc.id,
         title: formDoc.title,
         description: formDoc.description,
         status: formDoc.status,
-        confirmationMsg: formDoc.confirmationMsg,
+        confirmationMsg: formDoc.confirmation_msg,
       },
-      questions: questionsRes.documents.map((q: any) => ({
-        $id: q.$id,
+      questions: (questions || []).map((q: any) => ({
+        $id: q.id,
         text: q.text,
         type: q.type,
         options: q.options || [],
         required: q.required || false,
-        order: q.order,
-        minValue: q.minValue,
-        maxValue: q.maxValue,
-        minLabel: q.minLabel,
-        maxLabel: q.maxLabel,
+        order: q.order_index,
+        minValue: q.min_value,
+        maxValue: q.max_value,
+        minLabel: q.min_label,
+        maxLabel: q.max_label,
       })),
     };
   } catch (error: any) {
@@ -70,43 +69,50 @@ export async function loadFormBySlug(slug: string) {
 }
 
 /**
- * Submit form response - runs on the server, bypasses CORS.
+ * Submit form response
  */
 export async function submitFormResponse(
   formId: string,
   answersData: { questionId: string; textValue: string; numberValue?: number | null }[]
 ) {
   try {
-    const databases = new Databases(getAdminClient());
-    const dbId = config.databaseId;
+    const supabase = createAdminClient();
 
     // Create response
-    const responseId = ID.unique();
-    await databases.createDocument(dbId, "responses", responseId, {
-      formId,
-      submittedAt: new Date().toISOString(),
-    });
+    const { data: response, error: responseError } = await supabase
+      .from('responses')
+      .insert({ form_id: formId, submitted_at: new Date().toISOString() })
+      .select()
+      .single();
 
-    // Create all answers in parallel
-    const answerPromises = answersData.map(a =>
-      databases.createDocument(dbId, "response_answers", ID.unique(), {
-        formId,
-        responseId,
-        questionId: a.questionId,
-        textValue: a.textValue,
-        numberValue: a.numberValue ?? null,
-      })
-    );
-    await Promise.all(answerPromises);
+    if (responseError) {
+      return { success: false, error: responseError.message };
+    }
 
-    // Update response count
-    try {
-      const formDoc = await databases.getDocument(dbId, "forms", formId);
-      const currentCount = (formDoc as any).responsesCount || 0;
-      await databases.updateDocument(dbId, "forms", formId, {
-        responsesCount: currentCount + 1,
-      });
-    } catch {}
+    const responseId = response.id;
+
+    // Create all answers
+    const answersToInsert = answersData.map(a => ({
+      form_id: formId,
+      response_id: responseId,
+      question_id: a.questionId,
+      text_value: a.textValue,
+      number_value: a.numberValue ?? null,
+    }));
+
+    const { error: answersError } = await supabase
+      .from('response_answers')
+      .insert(answersToInsert);
+
+    if (answersError) {
+      return { success: false, error: answersError.message };
+    }
+
+    // Update response count (using RPC or direct update, direct for now)
+    const { data: formDoc } = await supabase.from('forms').select('responses_count').eq('id', formId).single();
+    if (formDoc) {
+      await supabase.from('forms').update({ responses_count: (formDoc.responses_count || 0) + 1 }).eq('id', formId);
+    }
 
     return { success: true, responseId };
   } catch (error: any) {
