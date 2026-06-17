@@ -64,8 +64,14 @@ export async function loadFormDetailServer(formId: string) {
     
     let answerDocs: any[] = [];
     if (rs && rs.length > 0) {
-      const { data: ans } = await supabase.from('response_answers').select('*').eq('form_id', formId).limit(5000);
-      if (ans) answerDocs = ans;
+      let offset = 0;
+      while(true) {
+        const { data: ans } = await supabase.from('response_answers').select('*').eq('form_id', formId).range(offset, offset + 999);
+        if (!ans || ans.length === 0) break;
+        answerDocs = answerDocs.concat(ans);
+        if (ans.length < 1000) break;
+        offset += 1000;
+      }
     }
 
     return {
