@@ -14,6 +14,7 @@ export default function AnalysisPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -103,12 +104,11 @@ export default function AnalysisPage() {
       {reportData && (
         <div className="mt-12 border-t pt-8">
           <div className="flex flex-wrap gap-4 justify-center mb-8 print:hidden" dir="rtl">
-             <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
-                <Printer className="w-5 h-5" /> طباعة التقرير
+             <button onClick={() => setIsPreviewOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
+                <Printer className="w-5 h-5" /> معاينة وتصدير PDF
              </button>
-             <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1 disabled:opacity-50">
-                {isExporting ? <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-5 h-5" />}
-                تصدير PDF
+             <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
+                <Printer className="w-5 h-5" /> طباعة
              </button>
              <button onClick={handleExportPNG} disabled={isExporting} className="flex items-center gap-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1 disabled:opacity-50">
                 {isExporting ? <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-5 h-5" />}
@@ -129,6 +129,31 @@ export default function AnalysisPage() {
               <ReportPrintableView data={reportData} />
             </div>
           </div>
+
+          {/* Preview Modal */}
+          {isPreviewOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+               <div className="bg-gray-200 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+                  <div className="bg-white px-6 py-4 border-b flex justify-between items-center">
+                     <h3 className="font-bold text-lg text-gray-800">معاينة التقرير</h3>
+                     <div className="flex gap-3">
+                        <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm disabled:opacity-50 text-sm">
+                           {isExporting ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-4 h-4" />}
+                           حفظ كـ PDF
+                        </button>
+                        <button onClick={() => setIsPreviewOpen(false)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm">
+                           إغلاق
+                        </button>
+                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-8 flex justify-center custom-scrollbar">
+                     <div className="transform scale-75 md:scale-90 origin-top">
+                        <ReportPrintableView data={reportData} />
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
         </div>
       )}
     </div>

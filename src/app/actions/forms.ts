@@ -49,6 +49,9 @@ export async function loadFormBySlug(slug: string) {
         description: formDoc.description,
         status: formDoc.status,
         confirmationMsg: formDoc.confirmation_msg,
+        collegeLogo: formDoc.college_logo,
+        universityLogo: formDoc.university_logo,
+        qualityLogo: formDoc.quality_logo,
       },
       questions: (questions || []).map((q: any) => ({
         $id: q.id,

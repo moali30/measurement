@@ -39,6 +39,52 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
     loadForms();
   }, []);
 
+  useEffect(() => {
+    async function fetchFormDetails() {
+      if (!selectedFormId) return;
+      const result = await loadFormDetailServer(selectedFormId);
+      if (result.success && result.form && result.questions) {
+        // Map logos
+        setLogos(prev => ({
+          ...prev,
+          college: result.form.collegeLogo || prev.college,
+          university: result.form.universityLogo || prev.university,
+          quality: result.form.qualityLogo || prev.quality
+        }));
+        
+        // Map axes based on question minLabel
+        const formAxes: Axis[] = [];
+        let currentAxis: Partial<Axis> | null = null;
+        let questionNumber = 1;
+
+        result.questions.forEach((q: any) => {
+          if (q.minLabel) {
+             if (currentAxis && currentAxis.name !== q.minLabel) {
+                // close previous axis
+                (currentAxis as Partial<Axis>).end = questionNumber - 1;
+                formAxes.push(currentAxis as Axis);
+                // start new axis
+                currentAxis = { name: q.minLabel, start: questionNumber };
+             } else if (!currentAxis) {
+                currentAxis = { name: q.minLabel, start: questionNumber };
+             }
+          }
+          questionNumber++;
+        });
+
+        if (currentAxis) {
+          (currentAxis as Partial<Axis>).end = questionNumber - 1;
+          formAxes.push(currentAxis as Axis);
+        }
+
+        if (formAxes.length > 0) {
+          setAxes(formAxes);
+        }
+      }
+    }
+    fetchFormDetails();
+  }, [selectedFormId]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);

@@ -23,6 +23,9 @@ interface FormData {
   description: string;
   status: string;
   confirmationMsg?: string;
+  collegeLogo?: string;
+  universityLogo?: string;
+  qualityLogo?: string;
 }
 
 export default function PublicFormPage({ params }: { params: { slug: string } }) {
@@ -225,6 +228,22 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
           <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
+          
+          {/* Logos section */}
+          {(form?.qualityLogo || form?.universityLogo || form?.collegeLogo) && (
+            <div className="px-8 pt-8 flex justify-between items-center flex-wrap gap-4">
+              <div className="w-24 flex justify-end">
+                {form?.qualityLogo && <img src={form.qualityLogo} alt="شعار ضمان الجودة" className="max-h-20 object-contain" />}
+              </div>
+              <div className="flex-1 flex justify-center">
+                {form?.universityLogo && <img src={form.universityLogo} alt="شعار الجامعة" className="max-h-20 object-contain" />}
+              </div>
+              <div className="w-24 flex justify-start">
+                {form?.collegeLogo && <img src={form.collegeLogo} alt="شعار الكلية" className="max-h-20 object-contain" />}
+              </div>
+            </div>
+          )}
+
           <div className="p-8 text-center">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 mb-4">
               <span className="text-2xl">📋</span>

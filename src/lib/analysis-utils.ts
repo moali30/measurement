@@ -157,10 +157,19 @@ export function generateAutoComment(results: QuestionResult[], average: number, 
           <p>محور "${highestAxis.name}" ${generateAxisComment(highestAxis.average || 0)}.</p>
           <p>محور "${lowestAxis.name}" ${generateAxisComment(lowestAxis.average || 0)}.</p>
         </div>
-      </div>
-    `;
-  } else {
-    comment += `</div>`;
+      </div>`;
+  }
+
+  // Recommendations based on weaknesses
+  if (weaknesses.length > 0) {
+     comment += `
+      <div class="detailed-analysis bg-blue-50/50 border-r-4 border-blue-700 p-4 rounded-xl my-4 text-gray-800 dark:text-gray-200 dark:bg-blue-900/20">
+        <h4 class="font-bold mb-2 text-blue-800 dark:text-blue-400">التوصيات وخطة التحسين المبدئية</h4>
+        <p class="mb-2">بناءً على النتائج التي حصلت على تقييم أقل من 70%، نوصي بالآتي:</p>
+        <ul class="list-disc list-inside space-y-1">
+          ${results.filter(r => r.relativeWeight < 70).slice(0, 5).map(r => `<li>مراجعة الأسباب المؤدية لتدني تقييم <strong>"${r.question}"</strong> (نسبة ${r.relativeWeight}%) ووضع خطة تصحيحية فورية.</li>`).join('')}
+        </ul>
+      </div>`;
   }
 
   return comment;
