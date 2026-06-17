@@ -78,9 +78,9 @@ export async function loadFormDetailServer(formId: string) {
         slug: f.slug, 
         responsesCount: f.responses_count || 0, 
         createdAt: f.created_at, 
-        collegeLogo: f.collegeLogo, // Notice: these fields aren't in standard schema, mapped as JSON or we keep them
-        universityLogo: f.universityLogo, 
-        qualityLogo: f.qualityLogo 
+        collegeLogo: f.college_logo,
+        universityLogo: f.university_logo, 
+        qualityLogo: f.quality_logo 
       },
       questions: (qs || []).map((q: any) => ({ $id: q.id, text: q.text, type: q.type, options: q.options || [], required: q.required || false, order: q.order_index, minLabel: q.min_label, maxLabel: q.max_label, minValue: q.min_value, maxValue: q.max_value })),
       responses: (rs || []).map((r: any) => ({ $id: r.id, submittedAt: r.submitted_at })),
@@ -103,8 +103,9 @@ export async function updateFormServer(formId: string, data: Record<string, any>
     if ('status' in data) updateData.status = data.status;
     if ('slug' in data) updateData.slug = data.slug;
     
-    // Some fields were custom attributes, just passing them to update might fail if columns don't exist
-    // You might want to update your schema.sql to add collegeLogo, universityLogo, qualityLogo
+    if ('collegeLogo' in data) updateData.college_logo = data.collegeLogo;
+    if ('universityLogo' in data) updateData.university_logo = data.universityLogo;
+    if ('qualityLogo' in data) updateData.quality_logo = data.qualityLogo;
     
     const { error } = await supabase.from('forms').update(updateData).eq('id', formId);
     if (error) throw error;
@@ -174,7 +175,7 @@ export async function createAnswerServer(formId: string, responseId: string, que
 }
 
 export async function createFormServer(
-  formData: { title: string; description: string; createdBy: string; slug: string; },
+  formData: { title: string; description: string; createdBy: string; slug: string; collegeLogo?: string; universityLogo?: string; qualityLogo?: string; },
   questionsData: { text: string; type: string; options: string[]; required: boolean; order: number; minValue?: number | null; maxValue?: number | null; minLabel?: string | null; maxLabel?: string | null; }[]
 ) {
   try {
@@ -190,6 +191,9 @@ export async function createFormServer(
       allow_anonymous: true,
       prevent_duplicate: false,
       require_login: false,
+      college_logo: formData.collegeLogo,
+      university_logo: formData.universityLogo,
+      quality_logo: formData.qualityLogo,
     }).select().single();
 
     if (fError) throw fError;

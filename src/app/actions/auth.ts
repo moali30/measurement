@@ -15,7 +15,7 @@ export async function serverLogin(email: string, password: string) {
 
     if (error) {
       const msg = error.message.toLowerCase();
-      if (msg.includes("invalid credentials") || msg.includes("password")) {
+      if (msg.includes("invalid login credentials") || msg.includes("invalid credentials") || msg.includes("password")) {
         return { success: false, error: "البريد الإلكتروني أو كلمة المرور غير صحيحة." };
       }
       return { success: false, error: error.message };

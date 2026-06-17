@@ -1,0 +1,136 @@
+'use client';
+
+import React, { useState, useRef } from 'react';
+import AnalysisForm from '@/components/analysis/AnalysisForm';
+import AnalysisReport from '@/components/analysis/AnalysisReport';
+import ReportPrintableView from '@/components/analysis/ReportPrintableView';
+import { processData } from '@/lib/analysis-utils';
+import { ReportData } from '@/types/analysis';
+import { Printer, Download, Save } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
+export default function AnalysisPage() {
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handleGenerate = (formData: Partial<ReportData>, rawData: any[]) => {
+    setIsGenerating(true);
+    // Simulate slight delay for UX
+    setTimeout(() => {
+      const processed = processData(rawData, formData.axes || []);
+      setReportData({
+        ...formData,
+        ...processed
+      } as ReportData);
+      setIsGenerating(false);
+    }, 500);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleExportPDF = async () => {
+    if (!printRef.current || !reportData) return;
+    
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pages = printRef.current.querySelectorAll('.report-page');
+
+      for (let i = 0; i < pages.length; i++) {
+        const canvas = await html2canvas(pages[i] as HTMLElement, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdfWidth = doc.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        if (i > 0) doc.addPage();
+        doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      }
+      doc.save(`${reportData.title || 'report'}.pdf`);
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      alert('حدث خطأ أثناء تصدير الـ PDF');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPNG = async () => {
+     if (!printRef.current || !reportData) return;
+     setIsExporting(true);
+     try {
+       const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
+       const link = document.createElement('a');
+       link.download = `${reportData.title || 'report'}.png`;
+       link.href = canvas.toDataURL('image/png');
+       link.click();
+     } catch (err) {
+        console.error(err);
+        alert('حدث خطأ أثناء تصدير الـ PNG');
+     } finally {
+        setIsExporting(false);
+     }
+  };
+
+  const handleSaveConfig = () => {
+    if (!reportData) return;
+    const dataStr = JSON.stringify(reportData, null, 2);
+    const blob = new Blob([dataStr], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = `${reportData.title || 'settings'}.json`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="container mx-auto p-4 md:p-6 max-w-7xl">
+      <div className="mb-8 print:hidden">
+        <h1 className="text-3xl font-bold text-indigo-900 dark:text-indigo-400 mb-2 font-serif" dir="rtl">تحليل الاستبيانات الأكاديمي</h1>
+        <p className="text-gray-600 dark:text-gray-400 font-medium" dir="rtl">نظام متقدم لتحليل البيانات وإنشاء التقارير الأكاديمية</p>
+      </div>
+
+      <div className="print:hidden">
+        <AnalysisForm onGenerate={handleGenerate} isLoading={isGenerating} />
+      </div>
+
+      {reportData && (
+        <div className="mt-12 border-t pt-8">
+          <div className="flex flex-wrap gap-4 justify-center mb-8 print:hidden" dir="rtl">
+             <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
+                <Printer className="w-5 h-5" /> طباعة التقرير
+             </button>
+             <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1 disabled:opacity-50">
+                {isExporting ? <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-5 h-5" />}
+                تصدير PDF
+             </button>
+             <button onClick={handleExportPNG} disabled={isExporting} className="flex items-center gap-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1 disabled:opacity-50">
+                {isExporting ? <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-5 h-5" />}
+                تصدير PNG
+             </button>
+             <button onClick={handleSaveConfig} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
+                <Save className="w-5 h-5" /> حفظ الإعدادات
+             </button>
+          </div>
+
+          <div className="print:hidden">
+            <AnalysisReport data={reportData} />
+          </div>
+          
+          {/* Print container (positioned off-screen for html2canvas, visible in print) */}
+          <div className="absolute left-[-15000px] top-0 print:static print:left-auto">
+            <div ref={printRef}>
+              <ReportPrintableView data={reportData} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

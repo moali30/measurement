@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp } from "lucide-react";
+import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp, Upload } from "lucide-react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
@@ -48,6 +48,9 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   const [title, setTitle] = useState(initialTitle || "");
   const [description, setDescription] = useState(initialDescription || "");
   const [questions, setQuestions] = useState<Question[]>(initialQuestions || []);
+  const [collegeLogo, setCollegeLogo] = useState<string>("");
+  const [universityLogo, setUniversityLogo] = useState<string>("");
+  const [qualityLogo, setQualityLogo] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savedSlug, setSavedSlug] = useState("");
@@ -57,6 +60,29 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   const [importTotal, setImportTotal] = useState(0);
   const [importStatus, setImportStatus] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+
+  const uploadLogo = async (type: "collegeLogo" | "universityLogo" | "qualityLogo") => {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const url = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        if (type === "collegeLogo") setCollegeLogo(url);
+        if (type === "universityLogo") setUniversityLogo(url);
+        if (type === "qualityLogo") setQualityLogo(url);
+      } catch (e: any) { 
+        console.error(e); 
+        alert("خطأ في رفع الصورة: " + (e?.message || "")); 
+      }
+    };
+    input.click();
+  };
 
   const addQuestion = useCallback((type: QuestionType = "multiple_choice") => {
     const defaults: Partial<Question> = {};
@@ -248,6 +274,9 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
           description,
           createdBy: user?.$id || "",
           slug,
+          collegeLogo,
+          universityLogo,
+          qualityLogo,
         },
         questions.map((q, i) => ({
           text: q.text,
@@ -422,6 +451,25 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
           </div>
         </div>
       )}
+
+      {/* Logos Section */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">الشعارات (تظهر في التقارير والطباعة)</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <button onClick={() => uploadLogo("collegeLogo")} className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-center group">
+            {collegeLogo ? <img src={collegeLogo} alt="شعار الكلية" className="w-16 h-16 mx-auto object-contain mb-2 rounded-lg" /> : <div className="w-16 h-16 mx-auto mb-2 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-blue-100"><Upload size={20} className="text-gray-400 group-hover:text-blue-500" /></div>}
+            <span className="text-xs text-gray-500">شعار الكلية</span>
+          </button>
+          <button onClick={() => uploadLogo("universityLogo")} className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-center group">
+            {universityLogo ? <img src={universityLogo} alt="شعار الجامعة" className="w-16 h-16 mx-auto object-contain mb-2 rounded-lg" /> : <div className="w-16 h-16 mx-auto mb-2 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-blue-100"><Upload size={20} className="text-gray-400 group-hover:text-blue-500" /></div>}
+            <span className="text-xs text-gray-500">شعار الجامعة</span>
+          </button>
+          <button onClick={() => uploadLogo("qualityLogo")} className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-center group">
+            {qualityLogo ? <img src={qualityLogo} alt="شعار ضمان الجودة" className="w-16 h-16 mx-auto object-contain mb-2 rounded-lg" /> : <div className="w-16 h-16 mx-auto mb-2 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-blue-100"><Upload size={20} className="text-gray-400 group-hover:text-blue-500" /></div>}
+            <span className="text-xs text-gray-500">شعار ضمان الجودة</span>
+          </button>
+        </div>
+      </div>
 
       {/* Form Header Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

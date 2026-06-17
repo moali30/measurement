@@ -16,6 +16,9 @@ CREATE TABLE public.forms (
     prevent_duplicate BOOLEAN DEFAULT false,
     require_login BOOLEAN DEFAULT false,
     confirmation_msg TEXT,
+    college_logo TEXT,
+    university_logo TEXT,
+    quality_logo TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

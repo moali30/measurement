@@ -40,7 +40,11 @@ export default function UsersManagementPage() {
     setIsLoadingList(true);
     const res = await listUsers();
     if (res.success) {
-      setUsersList(res.users || []);
+      const mappedUsers = (res.users || []).map((u: any) => ({
+        ...u,
+        email: u.email || ''
+      }));
+      setUsersList(mappedUsers);
     }
     setIsLoadingList(false);
   };
