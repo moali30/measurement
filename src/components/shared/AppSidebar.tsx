@@ -9,7 +9,8 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
-  Users
+  Users,
+  BarChart
 } from "lucide-react";
 import { useState } from "react";
 
@@ -21,6 +22,7 @@ export function AppSidebar() {
   const navigation = [
     { name: "الرئيسية", href: "/dashboard", icon: LayoutDashboard },
     { name: "الاستبيانات", href: "/dashboard/forms", icon: FileText },
+    { name: "التحليل والتقارير", href: "/dashboard/analysis", icon: BarChart },
   ];
 
   if (user?.email === "admin@aems.app") {
