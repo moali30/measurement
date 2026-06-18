@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp, Upload } from "lucide-react";
+import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp, Upload, FileText, Edit2 } from "lucide-react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
@@ -623,12 +623,26 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
             {categories.map((c, i) => (
               <div key={i} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs border border-blue-100">
                 {c}
-                <button onClick={() => {
-                  if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
-                    setCategories(categories.filter(cat => cat !== c));
-                    setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
-                  }
-                }} className="mr-2 hover:text-red-500 font-bold">×</button>
+                <div className="flex items-center mr-2 gap-1 border-r border-blue-200 pr-2">
+                  <button onClick={() => {
+                    const newName = prompt("تعديل اسم المحور:", c);
+                    if (newName && newName.trim() && newName.trim() !== c) {
+                      const finalName = newName.trim();
+                      if (categories.includes(finalName)) {
+                        alert("هذا المحور موجود مسبقاً!");
+                        return;
+                      }
+                      setCategories(categories.map(cat => cat === c ? finalName : cat));
+                      setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: finalName } : q));
+                    }
+                  }} className="text-blue-500 hover:text-blue-700 transition-colors" title="تعديل"><Edit2 size={12} /></button>
+                  <button onClick={() => {
+                    if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
+                      setCategories(categories.filter(cat => cat !== c));
+                      setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
+                    }
+                  }} className="text-gray-400 hover:text-red-500 transition-colors font-bold" title="حذف">×</button>
+                </div>
               </div>
             ))}
           </div>

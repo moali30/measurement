@@ -52,14 +52,14 @@ export async function generateQuestionsFromImage(base64Images: string[]) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "qwen/qwen3.6-27b",
+        model: "llama-3.2-90b-vision-preview",
         messages: [
           {
             role: "user",
             content: content
           }
         ],
-        temperature: 0.2,
+        temperature: 0.1,
         max_tokens: 4096
       })
     });
@@ -72,6 +72,9 @@ export async function generateQuestionsFromImage(base64Images: string[]) {
 
     const data = await response.json();
     let textOutput = data.choices[0].message.content;
+
+    // Remove <think>...</think> tags if they exist
+    textOutput = textOutput.replace(/<think>[\s\S]*?<\/think>/gi, '');
 
     // Clean up output in case it wrapped in markdown
     textOutput = textOutput.replace(/```json/g, "").replace(/```/g, "").trim();

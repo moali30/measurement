@@ -4,10 +4,26 @@ import { useState, useEffect, useRef } from "react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight, FileText, Edit2 } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer } from "@/app/actions/dashboard";
+
+export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
+
+const QUESTION_TYPES: { value: QuestionType; label: string; icon: React.ReactNode }[] = [
+  { value: "multiple_choice", label: "اختيار من متعدد", icon: <List size={16} /> },
+  { value: "checkbox", label: "مربعات اختيار", icon: <CheckSquare size={16} /> },
+  { value: "dropdown", label: "قائمة منسدلة", icon: <ChevronDown size={16} /> },
+  { value: "text", label: "نص حر", icon: <AlignRight size={16} /> },
+  { value: "rating", label: "تقييم (نجوم)", icon: <Star size={16} /> },
+  { value: "likert", label: "مقياس ليكرت", icon: <ToggleLeft size={16} /> },
+  { value: "yes_no", label: "نعم / لا", icon: <ThumbsUp size={16} /> },
+  { value: "linear_scale", label: "مقياس خطي", icon: <Hash size={16} /> },
+  { value: "date", label: "تاريخ", icon: <Calendar size={16} /> },
+];
+
+const LIKERT_OPTIONS = ["موافق جداً", "موافق", "محايد", "غير موافق", "غير موافق جداً"];
 
 interface FormData { $id: string; title: string; description: string; status: string; slug: string; responsesCount: number; createdAt: string; collegeLogo?: string; universityLogo?: string; qualityLogo?: string; }
 interface Question { $id: string; text: string; type: string; options: string[]; required: boolean; order: number; minLabel?: string; maxLabel?: string; minValue?: number; maxValue?: number; }
@@ -32,6 +48,8 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [selectedResponse, setSelectedResponse] = useState<Response | null>(null);
   const [currentResponseIndex, setCurrentResponseIndex] = useState(0);
   const [deletedQuestionsIds, setDeletedQuestionsIds] = useState<string[]>([]);
+  const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
+  const [showTypeMenu, setShowTypeMenu] = useState(false);
 
   // Helper functions moved to top
   const fmtDate = (d: string) => { 
@@ -157,6 +175,11 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     }
     newQs.forEach((q, i) => q.order = i);
     setQuestions(newQs);
+  };
+
+  const duplicateQuestion = (q: Question) => {
+    const newQ = { ...q, $id: "new_" + ID.unique(), order: questions.length };
+    setQuestions(prev => [...prev, newQ]);
   };
 
   const importQuestionsOnly = () => {
@@ -734,6 +757,118 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     });
   };
 
+  const renderQuestionPreview = (q: Question) => {
+    switch (q.type) {
+      case "multiple_choice":
+        return (
+          <div className="space-y-2 mt-4">
+            {q.options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                <input
+                  value={opt} onChange={e => updOpt(q.$id, i, e.target.value)}
+                  className="flex-1 py-1.5 px-0 border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent text-sm"
+                />
+                {q.options.length > 1 && (
+                  <button onClick={() => rmOpt(q.$id, i)} className="text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => addOpt(q.$id)} className="flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm mt-2 transition-colors">
+              <Plus size={14} /> إضافة خيار
+            </button>
+          </div>
+        );
+
+      case "checkbox":
+        return (
+          <div className="space-y-2 mt-4">
+            {q.options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0" />
+                <input value={opt} onChange={e => updOpt(q.$id, i, e.target.value)}
+                  className="flex-1 py-1.5 px-0 border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent text-sm" />
+                {q.options.length > 1 && <button onClick={() => rmOpt(q.$id, i)} className="text-gray-300 hover:text-red-400"><Trash2 size={14} /></button>}
+              </div>
+            ))}
+            <button onClick={() => addOpt(q.$id)} className="flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm mt-2"><Plus size={14} /> إضافة خيار</button>
+          </div>
+        );
+
+      case "dropdown":
+        return (
+          <div className="space-y-2 mt-4">
+            {q.options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-xs text-gray-400 w-5">{i + 1}.</span>
+                <input value={opt} onChange={e => updOpt(q.$id, i, e.target.value)}
+                  className="flex-1 py-1.5 px-0 border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent text-sm" />
+                {q.options.length > 1 && <button onClick={() => rmOpt(q.$id, i)} className="text-gray-300 hover:text-red-400"><Trash2 size={14} /></button>}
+              </div>
+            ))}
+            <button onClick={() => addOpt(q.$id)} className="flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm mt-2"><Plus size={14} /> إضافة خيار</button>
+          </div>
+        );
+
+      case "text":
+        return <div className="mt-4 border-b-2 border-dashed border-gray-200 pb-3 text-gray-400 text-sm">سيكتب المستجيب إجابته هنا...</div>;
+
+      case "rating":
+        return (
+          <div className="flex gap-1.5 mt-4" dir="ltr">
+            {[1, 2, 3, 4, 5].map(s => (
+              <Star key={s} size={28} className="text-amber-300 fill-amber-300" />
+            ))}
+          </div>
+        );
+
+      case "likert":
+        return (
+          <div className="mt-4 flex justify-between bg-gray-50 rounded-xl p-4">
+            {LIKERT_OPTIONS.map((opt, i) => (
+              <div key={i} className="flex flex-col items-center gap-2 text-center">
+                <div className={`w-5 h-5 rounded-full border-2 ${i === 0 ? 'border-green-400' : i === 4 ? 'border-red-400' : 'border-gray-300'}`} />
+                <span className="text-xs text-gray-500 max-w-[60px]">{opt}</span>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "yes_no":
+        return (
+          <div className="flex gap-4 mt-4">
+            <div className="flex-1 py-3 bg-green-50 border border-green-200 rounded-xl text-center text-green-700 font-medium text-sm">نعم ✓</div>
+            <div className="flex-1 py-3 bg-red-50 border border-red-200 rounded-xl text-center text-red-600 font-medium text-sm">لا ✗</div>
+          </div>
+        );
+
+      case "linear_scale":
+        return (
+          <div className="mt-4">
+            <div className="flex items-center gap-4 mb-3">
+              <input type="text" placeholder="تسمية البداية" value={q.minLabel || ""} onChange={e => updateQ(q.$id, { minLabel: e.target.value })}
+                className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400" />
+              <input type="text" placeholder="تسمية النهاية" value={q.maxLabel || ""} onChange={e => updateQ(q.$id, { maxLabel: e.target.value })}
+                className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+            <div className="flex justify-between bg-gray-50 rounded-xl p-3">
+              {Array.from({ length: (q.maxValue || 5) - (q.minValue || 1) + 1 }, (_, i) => (q.minValue || 1) + i).map(n => (
+                <div key={n} className="flex flex-col items-center gap-1">
+                  <div className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs font-medium text-gray-600">{n}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case "date":
+        return <div className="mt-4 px-4 py-3 border border-gray-200 rounded-xl text-gray-400 text-sm bg-gray-50">📅 يوم / شهر / سنة</div>;
+
+      default:
+        return null;
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" /></div>;
   if (!form) return <div className="text-center py-20 text-gray-500">الاستبيان غير موجود</div>;
 
@@ -788,24 +923,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
             <div className="p-6">
               <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full text-2xl font-bold border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="عنوان الاستبيان" />
-              <textarea value={(form.description || "").replace("[single_response]", "").trim()} onChange={e => { const hasSingle = (form.description || "").includes("[single_response]"); setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); }} rows={4} className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors text-sm resize-none" placeholder="وصف تفصيلي للاستبيان..." />
-              <div className="mt-4 flex items-center justify-between bg-blue-50/50 p-3 rounded-xl border border-blue-100">
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-800">منع الردود المتعددة</h4>
-                  <p className="text-xs text-gray-500">يسمح برد واحد فقط لكل جهاز/متصفح لضمان عدم التكرار.</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={form.description.includes("[single_response]")} onChange={e => {
-                    const hasSingle = form.description.includes("[single_response]");
-                    if (e.target.checked && !hasSingle) setForm({ ...form, description: form.description + "\n[single_response]" });
-                    else if (!e.target.checked && hasSingle) setForm({ ...form, description: form.description.replace("[single_response]", "").trim() });
-                  }} />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+              <textarea value={(form.description || "").replace("[single_response]", "").trim()} onChange={e => { const hasSingle = (form.description || "").includes("[single_response]"); setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); }} rows={4} className="w-full mt-3 text-gray-500 border border          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-700">إدارة المحاور (الفئات)</h3>
               <Button size="sm" variant="outline" onClick={() => {
@@ -820,35 +938,118 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                 {categories.map((c, i) => (
                   <div key={i} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs border border-blue-100">
                     {c}
-                    <button onClick={() => {
-                      if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
-                        setCategories(categories.filter(cat => cat !== c));
-                        setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
-                      }
-                    }} className="mr-2 hover:text-red-500 font-bold">×</button>
+                    <div className="flex items-center mr-2 gap-1 border-r border-blue-200 pr-2">
+                      <button onClick={() => {
+                        const newName = prompt("تعديل اسم المحور:", c);
+                        if (newName && newName.trim() && newName.trim() !== c) {
+                          const finalName = newName.trim();
+                          if (categories.includes(finalName)) {
+                            alert("هذا المحور موجود مسبقاً!");
+                            return;
+                          }
+                          setCategories(categories.map(cat => cat === c ? finalName : cat));
+                          setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: finalName } : q));
+                        }
+                      }} className="text-blue-500 hover:text-blue-700 transition-colors" title="تعديل"><Edit2 size={12} /></button>
+                      <button onClick={() => {
+                        if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
+                          setCategories(categories.filter(cat => cat !== c));
+                          setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
+                        }
+                      }} className="text-gray-400 hover:text-red-500 transition-colors font-bold" title="حذف">×</button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-          {questions.map((q, qi) => (
-            <div key={q.$id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-              <div className="flex items-start gap-3">
-                <div className="flex flex-col items-center gap-1 mt-1">
-                  <button onClick={() => moveQuestion(qi, 'up')} disabled={qi === 0} className="text-gray-300 hover:text-blue-500 disabled:opacity-30"><ArrowRight size={14} className="rotate-[-90deg]" /></button>
-                  <span className="w-6 h-6 rounded bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">{qi + 1}</span>
-                  <button onClick={() => moveQuestion(qi, 'down')} disabled={qi === questions.length - 1} className="text-gray-300 hover:text-blue-500 disabled:opacity-30"><ArrowRight size={14} className="rotate-90" /></button>
+          {questions.map((q, qIdx) => (
+            <div
+              key={q.$id}
+              className={`bg-white rounded-2xl shadow-sm border transition-all duration-200 ${
+                activeQuestion === q.$id ? 'border-blue-300 shadow-md shadow-blue-50 ring-1 ring-blue-100' : 'border-gray-100 hover:border-gray-200'
+              }`}
+              onClick={() => setActiveQuestion(q.$id)}
+            >
+              {activeQuestion === q.$id && <div className="h-1 bg-blue-500 rounded-t-2xl" />}
+              
+              <div className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex flex-col items-center gap-1 pt-2">
+                    <button onClick={() => moveQuestion(qIdx, 'up')} disabled={qIdx === 0} className="text-gray-300 hover:text-gray-500 disabled:opacity-30"><ArrowRight size={14} className="rotate-[-90deg]" /></button>
+                    <GripVertical size={16} className="text-gray-300" />
+                    <button onClick={() => moveQuestion(qIdx, 'down')} disabled={qIdx === questions.length - 1} className="text-gray-300 hover:text-gray-500 disabled:opacity-30"><ArrowRight size={14} className="rotate-90" /></button>
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">{qIdx + 1}</span>
+                      <input
+                        type="text" value={q.text} onChange={e => updateQ(q.$id, { text: e.target.value })}
+                        className="flex-1 text-base font-medium bg-transparent border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-1 transition-colors placeholder-gray-300"
+                        placeholder="اكتب السؤال هنا..."
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-1">
+                      <select
+                        value={q.type} onChange={e => {
+                          const newType = e.target.value as QuestionType;
+                          const updates: Partial<Question> = { type: newType };
+                          if (newType === "yes_no") updates.options = ["نعم", "لا"];
+                          else if (newType === "likert") updates.options = [...LIKERT_OPTIONS];
+                          else if (["multiple_choice", "checkbox", "dropdown"].includes(newType) && q.options.length === 0) updates.options = ["خيار 1"];
+                          updateQ(q.$id, updates);
+                        }}
+                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        {QUESTION_TYPES.map(t => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {renderQuestionPreview(q)}
+                  </div>
                 </div>
-                <div className="flex-1 space-y-3">
-                  <input type="text" value={q.text} onChange={e => updateQ(q.$id, { text: e.target.value })} className="w-full text-sm font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none pb-1" placeholder="نص السؤال..." />
-                  <select value={q.type} onChange={e => updateQ(q.$id, { type: e.target.value })} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-gray-50 cursor-pointer focus:outline-none">
-                    {[["multiple_choice", "اختيار من متعدد"], ["checkbox", "مربعات اختيار"], ["dropdown", "قائمة منسدلة"], ["text", "نص حر"], ["rating", "تقييم"], ["likert", "ليكرت"], ["yes_no", "نعم/لا"], ["linear_scale", "مقياس خطي"], ["date", "تاريخ"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                  {["multiple_choice", "checkbox", "dropdown"].includes(q.type) && (
-                    <div className="space-y-1.5">
-                      {q.options.map((o, oi) => (
-                        <div key={oi} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400">{oi + 1}.</span>
+
+                <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col gap-4">
+                  <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 self-start">
+                    <span className="text-xs font-medium text-gray-500">المحور المرتبط:</span>
+                    <select value={q.minLabel || ""} onChange={e => updateQ(q.$id, { minLabel: e.target.value })} className="text-xs bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5 cursor-pointer">
+                      <option value="">بدون محور</option>
+                      {categories.map((c, i) => <option key={i} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => duplicateQuestion(q)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="نسخ السؤال"><Copy size={16} /></button>
+                      <button onClick={() => deleteQ(q.$id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="حذف السؤال"><Trash2 size={16} /></button>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <span className="text-xs text-gray-500">مطلوب</span>
+                      <div className="relative">
+                        <input type="checkbox" checked={q.required} onChange={e => updateQ(q.$id, { required: e.target.checked })} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-gray-200 peer-checked:bg-blue-500 rounded-full transition-colors" />
+                        <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm peer-checked:translate-x-4 transition-transform" />
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {questions.length === 0 && (
+            <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-blue-50 flex items-center justify-center">
+                <FileText size={28} className="text-blue-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-1">لا توجد أسئلة</h3>
+              <p className="text-sm text-gray-400 mb-6">لم يتم إضافة أي أسئلة لهذا الاستبيان حتى الآن.</p>
+            </div>
+          )}
                           <input value={o} onChange={e => updOpt(q.$id, oi, e.target.value)} className="flex-1 text-sm border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5" />
                           {q.options.length > 1 && <button onClick={() => rmOpt(q.$id, oi)} className="text-gray-300 hover:text-red-400"><Trash2 size={12} /></button>}
                         </div>
@@ -871,18 +1072,59 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               </div>
             </div>
           ))}
-          <div className="flex gap-3 flex-wrap">
-            <Button variant="outline" onClick={() => addQuestion()} className="rounded-xl flex gap-2"><Plus size={16} />إضافة سؤال</Button>
-            {user?.email === "admin@aems.app" && (
-              <>
-                <Button variant="outline" onClick={importQuestionsOnly} disabled={saving} className="rounded-xl flex gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">إضافة أسئلة عبر Excel</Button>
-                <Button variant="outline" onClick={() => addQuestion({ text: "الاسم", type: "text", required: false }, true)} className="rounded-xl flex gap-2 text-blue-600 border-blue-200 hover:bg-blue-50">إضافة حقل الاسم (اختياري)</Button>
-                <Button variant="outline" onClick={distributeNamesFromExcel} disabled={saving} className="rounded-xl flex gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"><FileSpreadsheet size={16} />توزيع أسماء (Excel)</Button>
-                <Button variant="outline" onClick={resetNameDistribution} disabled={saving} className="rounded-xl flex gap-2 text-red-500 border-red-200 hover:bg-red-50"><Trash2 size={16} />إلغاء التوزيع</Button>
-                <Button variant="outline" onClick={importExcelData} disabled={saving} className="rounded-xl flex gap-2 text-green-600 border-green-200 hover:bg-green-50"><FileSpreadsheet size={16} />استيراد إجابات Excel</Button>
-              </>
-            )}
-            <Button onClick={saveQuestions} disabled={saving} className={`rounded-xl flex gap-2 ${saved ? 'bg-green-500' : 'bg-blue-600 hover:bg-blue-700'}`}>{saving ? "جاري الحفظ..." : saved ? "✓ تم الحفظ" : <><Save size={16} />حفظ التعديلات (يتم الحفظ التلقائي)</>}</Button>
+          {/* Floating Action Bar */}
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+            <div className="bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl shadow-gray-300/30 border border-gray-100 flex items-center gap-3">
+              {/* Add Question */}
+              <div className="relative">
+                <Button
+                  onClick={() => setShowTypeMenu(!showTypeMenu)}
+                  variant="outline"
+                  className="rounded-xl flex gap-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 px-4"
+                >
+                  <Plus size={16} /> إضافة سؤال
+                </Button>
+                
+                {showTypeMenu && (
+                  <div className="absolute bottom-full mb-2 right-0 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 max-h-80 overflow-auto">
+                    {QUESTION_TYPES.map(t => (
+                      <button
+                        key={t.value}
+                        onClick={() => {
+                          const overrides: Partial<Question> = { type: t.value };
+                          if (t.value === "yes_no") overrides.options = ["نعم", "لا"];
+                          else if (t.value === "likert") overrides.options = [...LIKERT_OPTIONS];
+                          else if (["multiple_choice", "checkbox", "dropdown"].includes(t.value)) overrides.options = ["خيار 1"];
+                          else overrides.options = [];
+                          
+                          addQuestion(overrides);
+                          setShowTypeMenu(false);
+                          setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+                        }}
+                        className="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-3 transition-colors"
+                      >
+                        <span className="text-gray-400">{t.icon}</span>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {user?.email === "admin@aems.app" && (
+                <>
+                  <div className="w-px h-8 bg-gray-200"></div>
+                  <Button variant="outline" onClick={importQuestionsOnly} disabled={saving} className="rounded-xl flex gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">أسئلة (Excel)</Button>
+                  <Button variant="outline" onClick={() => addQuestion({ text: "الاسم", type: "text", required: false }, true)} className="rounded-xl flex gap-2 text-blue-600 border-blue-200 hover:bg-blue-50">اسم</Button>
+                  <Button variant="outline" onClick={distributeNamesFromExcel} disabled={saving} className="rounded-xl flex gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"><FileSpreadsheet size={16} />توزيع أسماء</Button>
+                  <Button variant="outline" onClick={importExcelData} disabled={saving} className="rounded-xl flex gap-2 text-green-600 border-green-200 hover:bg-green-50"><FileSpreadsheet size={16} />إجابات</Button>
+                </>
+              )}
+
+              <div className="w-px h-8 bg-gray-200"></div>
+
+              <Button onClick={saveQuestions} disabled={saving} className={`rounded-xl flex gap-2 px-6 shadow-md transition-all ${saved ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}>{saving ? "جاري الحفظ..." : saved ? "✓ تم الحفظ" : <><Save size={16} />حفظ</>}</Button>
+            </div>
           </div>
         </div>
       )}
