@@ -7,6 +7,11 @@ import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
 import { createFormServer } from "@/app/actions/dashboard";
+import { generateQuestionsFromImage } from "@/app/actions/ai";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set worker path to local unpkg or cloudflare
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
 
@@ -61,6 +66,104 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   const [importTotal, setImportTotal] = useState(0);
   const [importStatus, setImportStatus] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+
+  const importFromAI = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,image/png,image/jpeg,image/jpg";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      setIsImporting(true);
+      setImportStatus("جاري قراءة الملف...");
+      setImportTotal(1);
+      setImportProgress(0);
+
+      try {
+        const base64Images: string[] = [];
+
+        if (file.type === "application/pdf") {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const numPages = Math.min(pdf.numPages, 3); // Max 3 pages
+
+          for (let i = 1; i <= numPages; i++) {
+            setImportStatus(`جاري معالجة الصفحة ${i} من ${numPages}...`);
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            if (context) {
+              await page.render({ canvasContext: context, viewport }).promise;
+              base64Images.push(canvas.toDataURL("image/jpeg", 0.8));
+            }
+          }
+        } else if (file.type.startsWith("image/")) {
+          setImportStatus("جاري معالجة الصورة...");
+          const url = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const img = document.createElement("img");
+              img.src = event.target?.result as string;
+              img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const maxWidth = 1024;
+                const scaleSize = Math.min(1, maxWidth / img.width);
+                canvas.width = img.width * scaleSize;
+                canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext("2d");
+                ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL("image/jpeg", 0.8));
+              };
+              img.onerror = () => reject(new Error("فشل قراءة الصورة"));
+            };
+            reader.onerror = () => reject(new Error("فشل قراءة الملف"));
+            reader.readAsDataURL(file);
+          });
+          base64Images.push(url);
+        }
+
+        setImportStatus("جاري تحليل الأسئلة بالذكاء الاصطناعي (قد يستغرق بعض الوقت)...");
+        const result = await generateQuestionsFromImage(base64Images);
+
+        if (!result.success || !result.questions) {
+          throw new Error(result.error || "فشل الذكاء الاصطناعي في تحليل الأسئلة.");
+        }
+
+        const newQuestions: Question[] = result.questions.map((q: any) => ({
+          id: ID.unique(),
+          text: q.text || "سؤال جديد",
+          type: q.type || "text",
+          options: q.options || [],
+          required: !!q.required,
+          minLabel: q.minLabel || undefined,
+        }));
+
+        setQuestions((prev) => [...prev, ...newQuestions]);
+
+        // Add any new categories found
+        const newCats = new Set<string>();
+        newQuestions.forEach(q => { if (q.minLabel) newCats.add(q.minLabel); });
+        setCategories((prev) => {
+          const combined = Array.from(new Set([...prev, ...Array.from(newCats)]));
+          return combined;
+        });
+
+        setImportProgress(1);
+        setImportStatus("تم بنجاح!");
+      } catch (err: any) {
+        console.error(err);
+        alert("حدث خطأ أثناء الاستيراد: " + (err?.message || ""));
+      } finally {
+        setTimeout(() => setIsImporting(false), 1000);
+      }
+    };
+    input.click();
+  };
 
   const uploadLogo = async (type: "collegeLogo" | "universityLogo" | "qualityLogo") => {
     const input = document.createElement("input");
@@ -660,6 +763,16 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
           <>
           <div className="w-px h-8 bg-gray-200" />
 
+          {/* Import AI */}
+          <Button
+            onClick={importFromAI}
+            variant="outline"
+            className="rounded-xl flex gap-2 border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 px-4"
+          >
+            <SparklesIcon />
+            استيراد بالذكاء الاصطناعي
+          </Button>
+
           {/* Import Excel */}
           <Button
             onClick={importFromExcel}
@@ -717,6 +830,15 @@ function FileText(props: React.SVGProps<SVGSVGElement> & { size?: number }) {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function SparklesIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+      <path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>
     </svg>
   );
 }
