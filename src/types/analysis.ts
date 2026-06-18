@@ -31,5 +31,5 @@ export interface ReportData {
     university: string;
     college: string;
   };
-  signature: string;
+  signatures: {name: string, url: string}[];
 }

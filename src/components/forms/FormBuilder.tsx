@@ -56,6 +56,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   const [savedSlug, setSavedSlug] = useState("");
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
   const [importProgress, setImportProgress] = useState(0);
   const [importTotal, setImportTotal] = useState(0);
   const [importStatus, setImportStatus] = useState("");
@@ -68,10 +69,25 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const url = await new Promise<string>((resolve) => {
+        const url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
+          reader.onload = (event) => {
+            const img = document.createElement("img");
+            img.src = event.target?.result as string;
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const maxWidth = 500;
+              const scaleSize = Math.min(1, maxWidth / img.width);
+              canvas.width = img.width * scaleSize;
+              canvas.height = img.height * scaleSize;
+              const ctx = canvas.getContext("2d");
+              ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL("image/webp", 0.7)); 
+            };
+            img.onerror = () => reject(new Error("فشل قراءة الصورة"));
+          };
+          reader.onerror = () => reject(new Error("فشل قراءة الملف"));
         });
         if (type === "collegeLogo") setCollegeLogo(url);
         if (type === "universityLogo") setUniversityLogo(url);
@@ -488,6 +504,34 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         </div>
       </div>
 
+      {/* Categories (Axes) Management */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">إدارة المحاور (الفئات)</h3>
+          <Button size="sm" variant="outline" onClick={() => {
+            const c = prompt("أدخل اسم المحور الجديد:");
+            if (c && c.trim() && !categories.includes(c.trim())) setCategories([...categories, c.trim()]);
+          }} className="text-xs h-8">إضافة محور جديد</Button>
+        </div>
+        {categories.length === 0 ? (
+          <p className="text-xs text-gray-400">لا توجد محاور مضافة حالياً. يمكنك إضافتها لربط الأسئلة بها.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {categories.map((c, i) => (
+              <div key={i} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs border border-blue-100">
+                {c}
+                <button onClick={() => {
+                  if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
+                    setCategories(categories.filter(cat => cat !== c));
+                    setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
+                  }
+                }} className="mr-2 hover:text-red-500 font-bold">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Questions */}
       {questions.map((q, qIdx) => (
         <div
@@ -543,19 +587,30 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
             </div>
 
             {/* Question Footer */}
-            <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <button onClick={() => duplicateQuestion(q)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="نسخ السؤال"><Copy size={16} /></button>
-                <button onClick={() => deleteQuestion(q.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="حذف السؤال"><Trash2 size={16} /></button>
+            <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col gap-4">
+              {/* Category selector */}
+              <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 self-start">
+                <span className="text-xs font-medium text-gray-500">المحور المرتبط:</span>
+                <select value={q.minLabel || ""} onChange={e => updateQuestion(q.id, { minLabel: e.target.value })} className="text-xs bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5 cursor-pointer">
+                  <option value="">بدون محور</option>
+                  {categories.map((c, i) => <option key={i} value={c}>{c}</option>)}
+                </select>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <span className="text-xs text-gray-500">مطلوب</span>
-                <div className="relative">
-                  <input type="checkbox" checked={q.required} onChange={e => updateQuestion(q.id, { required: e.target.checked })} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-200 peer-checked:bg-blue-500 rounded-full transition-colors" />
-                  <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm peer-checked:translate-x-4 transition-transform" />
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => duplicateQuestion(q)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="نسخ السؤال"><Copy size={16} /></button>
+                  <button onClick={() => deleteQuestion(q.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="حذف السؤال"><Trash2 size={16} /></button>
                 </div>
-              </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className="text-xs text-gray-500">مطلوب</span>
+                  <div className="relative">
+                    <input type="checkbox" checked={q.required} onChange={e => updateQuestion(q.id, { required: e.target.checked })} className="sr-only peer" />
+                    <div className="w-9 h-5 bg-gray-200 peer-checked:bg-blue-500 rounded-full transition-colors" />
+                    <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm peer-checked:translate-x-4 transition-transform" />
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
         </div>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
-import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer } from "@/app/actions/dashboard";
+import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer } from "@/app/actions/dashboard";
 
 interface FormData { $id: string; title: string; description: string; status: string; slug: string; responsesCount: number; createdAt: string; collegeLogo?: string; universityLogo?: string; qualityLogo?: string; }
 interface Question { $id: string; text: string; type: string; options: string[]; required: boolean; order: number; minLabel?: string; maxLabel?: string; minValue?: number; maxValue?: number; }
@@ -31,6 +31,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedResponse, setSelectedResponse] = useState<Response | null>(null);
   const [currentResponseIndex, setCurrentResponseIndex] = useState(0);
+  const [deletedQuestionsIds, setDeletedQuestionsIds] = useState<string[]>([]);
 
   // Helper functions moved to top
   const fmtDate = (d: string) => { 
@@ -39,7 +40,36 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     } catch { return d; } 
   };
 
-  useEffect(() => { if (user) loadAll(); }, [user, params.id]);
+  const isInitialMount = useRef(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedData = useRef<string>("");
+  const isSavingRef = useRef(false);
+
+  useEffect(() => {
+    if (user) loadAll();
+  }, [user, params.id]);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    // Only auto-save if we're in the edit tab, and data is loaded
+    if (activeTab !== "edit" || loading || !form) return;
+
+    const currentData = JSON.stringify({ form, questions, deletedQuestionsIds });
+    if (currentData === lastSavedData.current) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      saveQuestions();
+    }, 1500);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [questions, form, deletedQuestionsIds]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -47,8 +77,10 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       // Server Action - no direct Appwrite connection!
       const result = await loadFormDetailServer(params.id);
       if (result.success) {
-        setForm({ ...(result.form as FormData), description: (result.form as FormData).description || "" });
+        setForm(result.form as FormData);
         setQuestions(result.questions as Question[]);
+        setDeletedQuestionsIds([]);
+        lastSavedData.current = JSON.stringify({ form: result.form, questions: result.questions || [], deletedQuestionsIds: [] });
         const sortedResponses = (result.responses as Response[]).sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
         setResponses(sortedResponses);
         setAnswers(result.answers as Answer[]);
@@ -61,20 +93,52 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
 
   // ─── SAVE QUESTIONS ───
   const saveQuestions = async () => {
-    if (!form) return;
+    if (!form || isSavingRef.current) return;
+    isSavingRef.current = true;
     setSaving(true);
     try {
       const descToSave = String(form.description || "").substring(0, 2000);
       const formResult = await updateFormServer(form.$id, { title: String(form.title || "").substring(0, 255), description: descToSave });
-      if (!formResult.success) { alert("خطأ في حفظ بيانات الاستبيان: " + (formResult.error || "")); setSaving(false); return; }
-      for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
+      if (!formResult.success) { alert("خطأ في حفظ بيانات الاستبيان: " + (formResult.error || "")); setSaving(false); isSavingRef.current = false; return; }
+      
+      const snapshot = [...questions];
+      const newIdMap = new Map<string, string>();
+      
+      for (let i = 0; i < snapshot.length; i++) {
+        const q = snapshot[i];
         const isNew = q.$id.startsWith("new_");
-        await saveQuestionServer(q.$id, form.$id, { text: q.text, type: q.type, options: q.options, required: q.required, order: i, minLabel: q.minLabel || null }, isNew);
+        const res = await saveQuestionServer(q.$id, form.$id, { text: q.text, type: q.type, options: q.options, required: q.required, order: i, minLabel: q.minLabel || null }, isNew);
+        if (isNew && res && res.success && res.newId) {
+          newIdMap.set(q.$id, res.newId);
+        }
       }
-      setSaved(true); setTimeout(() => setSaved(false), 2000);
+
+      if (newIdMap.size > 0) {
+        setQuestions(prev => {
+          const nextPrev = [...prev];
+          const prevIds = new Set(nextPrev.map(q => q.$id));
+          newIdMap.forEach((newId, oldId) => {
+            if (!prevIds.has(oldId)) {
+               deleteQuestionServer(newId);
+            }
+          });
+          return nextPrev.map(q => newIdMap.has(q.$id) ? { ...q, $id: newIdMap.get(q.$id)! } : q);
+        });
+      }
+      
+      const deletedIds = [...deletedQuestionsIds];
+      if (deletedIds.length > 0) {
+        for (const id of deletedIds) {
+          await deleteQuestionServer(id);
+        }
+        setDeletedQuestionsIds(prev => prev.filter(id => !deletedIds.includes(id)));
+      }
+      
+      const nextSavedQuestions = snapshot.map(q => newIdMap.has(q.$id) ? { ...q, $id: newIdMap.get(q.$id)! } : q);
+      lastSavedData.current = JSON.stringify({ form: { ...form, description: descToSave }, questions: nextSavedQuestions, deletedQuestionsIds: [] });
+      setSaved(true);
     } catch (e) { console.error(e); alert("خطأ أثناء الحفظ"); }
-    finally { setSaving(false); }
+    finally { setSaving(false); isSavingRef.current = false; }
   };
 
   const addQuestion = (override?: Partial<Question>, toFront = false) => {
@@ -127,7 +191,12 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     input.click();
   };
 
-  const deleteQ = (id: string) => setQuestions(questions.filter(q => q.$id !== id));
+  const deleteQ = (id: string) => {
+    if (!id.startsWith("new_")) {
+      setDeletedQuestionsIds(prev => [...prev, id]);
+    }
+    setQuestions(questions.filter(q => q.$id !== id));
+  };
 
   const addOpt = (qId: string) => setQuestions(qs => qs.map(q => q.$id === qId ? { ...q, options: [...q.options, `خيار ${q.options.length + 1}`] } : q));
   const updOpt = (qId: string, i: number, v: string) => setQuestions(qs => qs.map(q => { if (q.$id !== qId) return q; const o = [...q.options]; o[i] = v; return { ...q, options: o }; }));
@@ -140,11 +209,25 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file || !form) return;
       try {
-        // Convert to base64 for storage in document (no client SDK needed)
-        const url = await new Promise<string>((resolve) => {
+        const url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
+          reader.onload = (event) => {
+            const img = document.createElement("img");
+            img.src = event.target?.result as string;
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const maxWidth = 500;
+              const scaleSize = Math.min(1, maxWidth / img.width);
+              canvas.width = img.width * scaleSize;
+              canvas.height = img.height * scaleSize;
+              const ctx = canvas.getContext("2d");
+              ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL("image/webp", 0.7)); 
+            };
+            img.onerror = () => reject(new Error("فشل قراءة الصورة"));
+          };
+          reader.onerror = () => reject(new Error("فشل قراءة الملف"));
         });
         await updateFormServer(form.$id, { [type]: url });
         setForm({ ...form, [type]: url });
@@ -205,7 +288,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         for (let i = 0; i < headers.length; i++) {
           if (!headers[i]) continue;
           const qResult = await saveQuestionServer("", form.$id, {
-            text: headers[i], type: "likert", options: ["1", "2", "3", "4", "5"],
+            text: headers[i], type: "likert", options: ["موافق جداً", "موافق", "محايد", "غير موافق", "غير موافق جداً"],
             required: true, order: questions.length + i,
           }, true);
           if (qResult.success && qResult.newId) questionIdMap.set(i, qResult.newId);
@@ -662,9 +745,24 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         <Link href="/dashboard/forms"><button className="p-2 rounded-xl hover:bg-gray-100 text-gray-400"><ArrowRight size={20} /></button></Link>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900">{form.title}</h1>
-          <p className="text-sm text-gray-500">إنشاء: {fmtDate(form.createdAt)} • {responses.length} رد</p>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <span>إنشاء: {fmtDate(form.createdAt)} • {responses.length} رد</span>
+          </div>
         </div>
-        <a href={`/f/${form.slug}`} target="_blank" rel="noopener"><Button variant="outline" className="rounded-xl flex gap-2 text-sm"><Eye size={14} /> معاينة</Button></a>
+        <div className="flex items-center gap-3">
+          {saving ? (
+            <span className="flex items-center gap-2 text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
+              <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              جاري الحفظ...
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+              تم الحفظ
+            </span>
+          )}
+          <a href={`/f/${form.slug}`} target="_blank" rel="noopener"><Button variant="outline" className="rounded-xl flex gap-2 text-sm"><Eye size={14} /> معاينة</Button></a>
+        </div>
       </div>
 
       <div className="flex border-b border-gray-200">
@@ -784,7 +882,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                 <Button variant="outline" onClick={importExcelData} disabled={saving} className="rounded-xl flex gap-2 text-green-600 border-green-200 hover:bg-green-50"><FileSpreadsheet size={16} />استيراد إجابات Excel</Button>
               </>
             )}
-            <Button onClick={saveQuestions} disabled={saving} className={`rounded-xl flex gap-2 ${saved ? 'bg-green-500' : 'bg-blue-600 hover:bg-blue-700'}`}>{saving ? "جاري الحفظ..." : saved ? "✓ تم الحفظ" : <><Save size={16} />حفظ التعديلات</>}</Button>
+            <Button onClick={saveQuestions} disabled={saving} className={`rounded-xl flex gap-2 ${saved ? 'bg-green-500' : 'bg-blue-600 hover:bg-blue-700'}`}>{saving ? "جاري الحفظ..." : saved ? "✓ تم الحفظ" : <><Save size={16} />حفظ التعديلات (يتم الحفظ التلقائي)</>}</Button>
           </div>
         </div>
       )}

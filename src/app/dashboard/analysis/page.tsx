@@ -107,16 +107,6 @@ export default function AnalysisPage() {
              <button onClick={() => setIsPreviewOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
                 <Printer className="w-5 h-5" /> معاينة وتصدير PDF
              </button>
-             <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
-                <Printer className="w-5 h-5" /> طباعة
-             </button>
-             <button onClick={handleExportPNG} disabled={isExporting} className="flex items-center gap-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1 disabled:opacity-50">
-                {isExporting ? <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-5 h-5" />}
-                تصدير PNG
-             </button>
-             <button onClick={handleSaveConfig} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-transform hover:-translate-y-1">
-                <Save className="w-5 h-5" /> حفظ الإعدادات
-             </button>
           </div>
 
           <div className="print:hidden">

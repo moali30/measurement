@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, FileText, MoreHorizontal, Trash2, Share2, BarChart2, Eye, EyeOff, Clock, CheckCircle, Edit3, Grid, List, ArrowUpDown, CalendarDays, FolderOpen } from "lucide-react";
+import { Plus, Search, FileText, MoreHorizontal, Trash2, Share2, BarChart2, Eye, EyeOff, Clock, CheckCircle, Edit3, Grid, List, ArrowUpDown, CalendarDays, FolderOpen, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { listFormsServer, deleteFormServer, toggleFormStatusServer } from "@/app/actions/dashboard";
+import { listFormsServer, deleteFormServer, toggleFormStatusServer, duplicateFormServer } from "@/app/actions/dashboard";
 
 interface Form { $id: string; title: string; description: string; status: string; responsesCount: number; createdAt: string; slug: string; }
 
@@ -54,6 +54,18 @@ export default function FormsListPage() {
       }
     } catch(e) { console.error(e); }
     setOpenMenuId(null);
+  };
+
+  const duplicateForm = async (id: string) => {
+    setLoading(true);
+    try {
+      const result = await duplicateFormServer(id);
+      if (result.success) {
+        await loadForms();
+      } else {
+        alert("حدث خطأ أثناء نسخ الاستبيان");
+      }
+    } catch(e) { console.error(e); } finally { setLoading(false); setOpenMenuId(null); }
   };
 
   const filtered = useMemo(() => {
@@ -118,6 +130,7 @@ export default function FormsListPage() {
                 <a href={`/f/${form.slug}`} target="_blank" rel="noopener" className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-blue-50 text-gray-700"><Eye size={14} className="text-blue-500"/>معاينة الاستبيان</a>
                 <button onClick={()=>toggleStatus(form)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-gray-50 text-gray-700">{form.status==='active'?<><EyeOff size={14} className="text-gray-500"/>أرشفة</>:<><Eye size={14} className="text-emerald-500"/>تفعيل</>}</button>
                 <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/f/${form.slug}`);setOpenMenuId(null);}} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-gray-50 text-gray-700"><Share2 size={14} className="text-gray-400"/>نسخ الرابط</button>
+                <button onClick={()=>duplicateForm(form.$id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-blue-50 text-blue-600"><Copy size={14}/>إنشاء نسخة (Duplicate)</button>
                 <hr className="my-1.5 border-gray-100"/>
                 <button onClick={()=>deleteForm(form.$id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><Trash2 size={14}/>حذف</button>
               </div>
@@ -234,6 +247,7 @@ export default function FormsListPage() {
                           <td className="px-6 py-4">
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                               <button onClick={()=>toggleStatus(form)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title={form.status==='active'?'أرشفة':'تفعيل'}>{form.status==='active'?<EyeOff size={16}/>:<Eye size={16}/>}</button>
+                              <button onClick={()=>duplicateForm(form.$id)} className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500" title="إنشاء نسخة"><Copy size={16}/></button>
                               <button onClick={()=>deleteForm(form.$id)} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
                             </div>
                           </td>
@@ -270,6 +284,7 @@ export default function FormsListPage() {
                   <td className="px-6 py-4">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                       <button onClick={()=>toggleStatus(form)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title={form.status==='active'?'أرشفة':'تفعيل'}>{form.status==='active'?<EyeOff size={16}/>:<Eye size={16}/>}</button>
+                      <button onClick={()=>duplicateForm(form.$id)} className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500" title="إنشاء نسخة"><Copy size={16}/></button>
                       <button onClick={()=>deleteForm(form.$id)} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
                     </div>
                   </td>

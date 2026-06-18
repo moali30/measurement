@@ -240,6 +240,17 @@ export async function deleteAnswersByQuestionServer(formId: string, questionId: 
   }
 }
 
+export async function deleteQuestionServer(questionId: string) {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase.from('questions').delete().eq('id', questionId);
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function enableSingleResponseForAllServer() {
   try {
     const supabase = createAdminClient();
@@ -260,6 +271,59 @@ export async function enableSingleResponseForAllServer() {
     }
 
     return { success: true, total: forms?.length || 0, updated };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function duplicateFormServer(formId: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    // 1. Fetch form
+    const { data: form, error: fError } = await supabase.from('forms').select('*').eq('id', formId).single();
+    if (fError || !form) throw fError || new Error("Form not found");
+    
+    // 2. Fetch questions
+    const { data: questions, error: qError } = await supabase.from('questions').select('*').eq('form_id', formId).order('order_index', { ascending: true });
+    if (qError) throw qError;
+    
+    // 3. Insert new form
+    const { data: newForm, error: nError } = await supabase.from('forms').insert({
+      title: form.title + " (نسخة)",
+      description: form.description,
+      status: "draft",
+      slug: Math.random().toString(36).substring(2, 10),
+      responses_count: 0,
+      created_by: form.created_by,
+      allow_anonymous: form.allow_anonymous,
+      prevent_duplicate: form.prevent_duplicate,
+      require_login: form.require_login,
+      college_logo: form.college_logo,
+      university_logo: form.university_logo,
+      quality_logo: form.quality_logo
+    }).select().single();
+    if (nError) throw nError;
+    
+    // 4. Insert questions
+    if (questions && questions.length > 0) {
+      const qToInsert = questions.map(q => ({
+        form_id: newForm.id,
+        text: q.text,
+        type: q.type,
+        options: q.options,
+        required: q.required,
+        order_index: q.order_index,
+        min_value: q.min_value,
+        max_value: q.max_value,
+        min_label: q.min_label,
+        max_label: q.max_label
+      }));
+      const { error: insQError } = await supabase.from('questions').insert(qToInsert);
+      if (insQError) throw insQError;
+    }
+    
+    return { success: true, newFormId: newForm.id };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

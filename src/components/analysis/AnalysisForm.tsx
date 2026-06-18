@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Axis, ReportData } from '@/types/analysis';
-import { Upload, FileText, Calendar, Edit3, Image as ImageIcon, Plus, Trash2, Play, Database } from 'lucide-react';
+import { Upload, FileText, Calendar, Edit3, Image as ImageIcon, Plus, Trash2, Play, Database, PenTool } from 'lucide-react';
 import { listFormsServer, loadFormDetailServer } from '@/app/actions/dashboard';
+import { listSignaturesServer } from '@/app/actions/signatures';
 
 interface AnalysisFormProps {
   onGenerate: (data: Partial<ReportData>, rawData: Record<string, any>[]) => void;
@@ -25,7 +26,8 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [axes, setAxes] = useState<Axis[]>([{ name: '', start: 1, end: 1 }]);
   
   const [logos, setLogos] = useState({ quality: '', university: '', college: '' });
-  const [signature, setSignature] = useState('');
+  const [signaturesList, setSignaturesList] = useState<any[]>([]);
+  const [selectedSignatures, setSelectedSignatures] = useState<{name: string, url: string}[]>([]);
 
   useEffect(() => {
     async function loadForms() {
@@ -36,7 +38,14 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       }
       setIsFetchingForms(false);
     }
+    async function loadSigs() {
+      const res = await listSignaturesServer();
+      if (res.success && res.signatures) {
+        setSignaturesList(res.signatures);
+      }
+    }
     loadForms();
+    loadSigs();
   }, []);
 
   useEffect(() => {
@@ -96,11 +105,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
-        if (type === 'signature') {
-          setSignature(result);
-        } else {
-          setLogos(prev => ({ ...prev, [type]: result }));
-        }
+        setLogos(prev => ({ ...prev, [type]: result }));
       };
       reader.readAsDataURL(e.target.files[0]);
     }
@@ -130,7 +135,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       manualComment,
       axes: validAxes,
       logos,
-      signature
+      signatures: selectedSignatures
     };
 
     if (dataSource === 'db') {
@@ -342,8 +347,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
           {[
             { id: 'quality', label: 'شعار الجودة', value: logos.quality },
             { id: 'university', label: 'شعار الجامعة', value: logos.university },
-            { id: 'college', label: 'شعار الكلية', value: logos.college },
-            { id: 'signature', label: 'صورة التوقيع', value: signature }
+            { id: 'college', label: 'شعار الكلية', value: logos.college }
           ].map(item => (
             <div key={item.id} className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">{item.label}</label>
@@ -353,6 +357,39 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                   {item.value ? 'تم الرفع ✓' : 'رفع الصورة'}
                 </span>
               </div>
+            </div>
+          ))}
+        </div>
+
+        <h3 className="text-lg font-bold mt-8 mb-4 flex items-center text-indigo-800 dark:text-indigo-400">
+          <PenTool className="mr-2 h-5 w-5" /> التوقيعات المعتمدة (توقيعين بحد أقصى)
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[0, 1].map((index) => (
+            <div key={index} className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">التوقيع {index + 1}</label>
+              <select 
+                value={selectedSignatures[index]?.url || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const sig = signaturesList.find(s => s.image_url === val);
+                  const newSigs = [...selectedSignatures];
+                  if (sig) {
+                    newSigs[index] = { name: sig.name, url: sig.image_url };
+                  } else {
+                    newSigs.splice(index, 1); // remove if empty
+                  }
+                  // Clean up array if there's an empty slot at 0 and item at 1
+                  const cleanSigs = newSigs.filter(Boolean);
+                  setSelectedSignatures(cleanSigs);
+                }}
+                className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">-- بدون توقيع --</option>
+                {signaturesList.map(s => (
+                  <option key={s.id} value={s.image_url}>{s.name}</option>
+                ))}
+              </select>
             </div>
           ))}
         </div>

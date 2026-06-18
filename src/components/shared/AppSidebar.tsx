@@ -10,7 +10,8 @@ import {
   LogOut,
   ChevronLeft,
   Users,
-  BarChart
+  BarChart,
+  PenTool
 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +24,7 @@ export function AppSidebar() {
     { name: "الرئيسية", href: "/dashboard", icon: LayoutDashboard },
     { name: "الاستبيانات", href: "/dashboard/forms", icon: FileText },
     { name: "التحليل والتقارير", href: "/dashboard/analysis", icon: BarChart },
+    { name: "التوقيعات", href: "/dashboard/signatures", icon: PenTool },
   ];
 
   if (user?.email === "admin@aems.app") {
