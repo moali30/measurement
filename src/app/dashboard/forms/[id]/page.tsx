@@ -869,7 +869,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div></div>;
   if (!form) return <div className="text-center py-20 text-gray-500">الاستبيان غير موجود</div>;
 
   const analytics = getAnalytics();
@@ -923,7 +923,11 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
             <div className="p-6">
               <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full text-2xl font-bold border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="عنوان الاستبيان" />
-              <textarea value={(form.description || "").replace("[single_response]", "").trim()} onChange={e => { const hasSingle = (form.description || "").includes("[single_response]"); setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); }} rows={4} className="w-full mt-3 text-gray-500 border border          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+              <textarea value={(form.description || "").replace("[single_response]", "").trim()} onChange={e => { const hasSingle = (form.description || "").includes("[single_response]"); setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); }} rows={4} className="w-full mt-3 text-gray-500 border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="وصف الاستبيان (اختياري)" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-700">إدارة المحاور (الفئات)</h3>
               <Button size="sm" variant="outline" onClick={() => {
@@ -1050,28 +1054,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               <p className="text-sm text-gray-400 mb-6">لم يتم إضافة أي أسئلة لهذا الاستبيان حتى الآن.</p>
             </div>
           )}
-                          <input value={o} onChange={e => updOpt(q.$id, oi, e.target.value)} className="flex-1 text-sm border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5" />
-                          {q.options.length > 1 && <button onClick={() => rmOpt(q.$id, oi)} className="text-gray-300 hover:text-red-400"><Trash2 size={12} /></button>}
-                        </div>
-                      ))}
-                      <button onClick={() => addOpt(q.$id)} className="text-blue-500 text-xs flex items-center gap-1 hover:text-blue-600"><Plus size={12} />إضافة خيار</button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">مطلوب <input type="checkbox" checked={q.required} onChange={e => updateQ(q.$id, { required: e.target.checked })} className="rounded" /></label>
-                  <button onClick={() => deleteQ(q.$id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                </div>
-              </div>
-              <div className="mt-3 mr-9 flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                <span className="text-xs font-medium text-gray-500">المحور المرتبط:</span>
-                <select value={q.minLabel || ""} onChange={e => updateQ(q.$id, { minLabel: e.target.value })} className="flex-1 text-xs bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none pb-0.5 cursor-pointer">
-                  <option value="">بدون محور</option>
-                  {categories.map((c, i) => <option key={i} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-          ))}
+
           {/* Floating Action Bar */}
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
             <div className="bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl shadow-gray-300/30 border border-gray-100 flex items-center gap-3">
