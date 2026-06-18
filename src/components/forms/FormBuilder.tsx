@@ -759,10 +759,6 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
             )}
           </div>
 
-          {user?.email === "admin@aems.app" && (
-          <>
-          <div className="w-px h-8 bg-gray-200" />
-
           {/* Import AI */}
           <Button
             onClick={importFromAI}
@@ -772,6 +768,10 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
             <SparklesIcon />
             استيراد بالذكاء الاصطناعي
           </Button>
+
+          {user?.email === "admin@aems.app" && (
+          <>
+          <div className="w-px h-8 bg-gray-200" />
 
           {/* Import Excel */}
           <Button
