@@ -3,7 +3,7 @@
 export async function generateQuestionsFromImage(base64Images: string[]) {
   try {
     // استخدمنا MISTRAL_API_KEY بدلاً من Groq
-    const apiKey = process.env.MISTRAL_API_KEY;
+    const apiKey = process.env.MISTRAL_API_KEY || "GZZx7AipA7sdygHnIuRvXcJGIEuCS7FS";
     if (!apiKey) {
       throw new Error("لم يتم العثور على مفتاح Mistral API في الإعدادات");
     }
