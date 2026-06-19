@@ -930,7 +930,32 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             <div className="h-2 bg-gradient-to-l from-blue-500 to-blue-700" />
             <div className="p-6">
               <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full text-2xl font-bold border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="عنوان الاستبيان" />
-              <textarea value={(form.description || "").replace("[single_response]", "").trim()} onChange={e => { const hasSingle = (form.description || "").includes("[single_response]"); setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); }} rows={4} className="w-full mt-3 text-gray-500 border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" placeholder="وصف الاستبيان (اختياري)" />
+              <textarea 
+                value={(form.description || "").replace("[single_response]", "").trim()} 
+                onChange={e => { 
+                  const hasSingle = (form.description || "").includes("[single_response]"); 
+                  setForm({ ...form, description: e.target.value + (hasSingle ? "\n[single_response]" : "") }); 
+                }} 
+                rows={4} 
+                className="w-full mt-3 text-gray-500 border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-blue-500 focus:outline-none pb-2 transition-colors" 
+                placeholder="وصف الاستبيان (اختياري)" 
+              />
+              <label className="flex items-center gap-2 mt-4 cursor-pointer p-2 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors w-fit">
+                <input 
+                  type="checkbox" 
+                  checked={(form.description || "").includes("[single_response]")} 
+                  onChange={e => { 
+                    const currentDesc = (form.description || "");
+                    if (e.target.checked) {
+                      setForm({ ...form, description: currentDesc + "\n[single_response]" });
+                    } else {
+                      setForm({ ...form, description: currentDesc.replace("[single_response]", "").trim() });
+                    }
+                  }} 
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" 
+                />
+                <span className="text-sm font-medium text-gray-700">السماح برد واحد فقط (منع التكرار)</span>
+              </label>
             </div>
           </div>
 

@@ -568,10 +568,30 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
             placeholder="عنوان الاستبيان"
           />
           <textarea
-            value={description} onChange={e => setDescription(e.target.value)} rows={3}
+            value={description.replace("[single_response]", "").trim()} 
+            onChange={e => { 
+              const hasSingle = description.includes("[single_response]"); 
+              setDescription(e.target.value + (hasSingle ? "\n[single_response]" : "")); 
+            }} 
+            rows={3}
             className="w-full mt-3 text-gray-500 border border-gray-200 rounded-xl p-3 focus:border-blue-400 focus:outline-none transition-colors placeholder-gray-300 text-sm resize-none"
             placeholder="أضف وصفاً تفصيلياً للاستبيان (اختياري)..."
           />
+          <label className="flex items-center gap-2 mt-4 cursor-pointer p-2 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors w-fit">
+            <input 
+              type="checkbox" 
+              checked={description.includes("[single_response]")} 
+              onChange={e => { 
+                if (e.target.checked) {
+                  setDescription(description + "\n[single_response]");
+                } else {
+                  setDescription(description.replace("[single_response]", "").trim());
+                }
+              }} 
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" 
+            />
+            <span className="text-sm font-medium text-gray-700">السماح برد واحد فقط (منع التكرار)</span>
+          </label>
         </div>
       </div>
 
