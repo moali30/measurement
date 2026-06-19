@@ -7,7 +7,7 @@ import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
 import { createFormServer } from "@/app/actions/dashboard";
-import { generateQuestionsFromImage } from "@/app/actions/ai";
+import { generateQuestionsFromDocument } from "@/app/actions/ai";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
 import * as pdfjsLib from "pdfjs-dist";
@@ -87,54 +87,15 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
       setImportProgress(0);
 
       try {
-        const base64Images: string[] = [];
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("فشل قراءة الملف"));
+          reader.readAsDataURL(file);
+        });
 
-        if (file.type === "application/pdf") {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          const numPages = pdf.numPages; // اقرأ كل الصفحات
-
-          for (let i = 1; i <= numPages; i++) {
-            setImportStatus(`جاري معالجة الصفحة ${i} من ${numPages}...`);
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.5 });
-            const canvas = document.createElement("canvas");
-            const context = canvas.getContext("2d");
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-
-            if (context) {
-              await page.render({ canvasContext: context, viewport }).promise;
-              base64Images.push(canvas.toDataURL("image/jpeg", 0.8));
-            }
-          }
-        } else if (file.type.startsWith("image/")) {
-          setImportStatus("جاري معالجة الصورة...");
-          const url = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              const img = document.createElement("img");
-              img.src = event.target?.result as string;
-              img.onload = () => {
-                const canvas = document.createElement("canvas");
-                const maxWidth = 1024;
-                const scaleSize = Math.min(1, maxWidth / img.width);
-                canvas.width = img.width * scaleSize;
-                canvas.height = img.height * scaleSize;
-                const ctx = canvas.getContext("2d");
-                ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL("image/jpeg", 0.8));
-              };
-              img.onerror = () => reject(new Error("فشل قراءة الصورة"));
-            };
-            reader.onerror = () => reject(new Error("فشل قراءة الملف"));
-            reader.readAsDataURL(file);
-          });
-          base64Images.push(url);
-        }
-
-        setImportStatus("جاري تحليل الأسئلة بالذكاء الاصطناعي (قد يستغرق بعض الوقت)...");
-        const result = await generateQuestionsFromImage(base64Images);
+        setImportStatus("جاري استخراج البيانات باستخدام Mistral OCR (قد يستغرق بعض الوقت)...");
+        const result = await generateQuestionsFromDocument(fileBase64);
 
         if (!result.success || !result.questions) {
           throw new Error(result.error || "فشل الذكاء الاصطناعي في تحليل الأسئلة.");
