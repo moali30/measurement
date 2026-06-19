@@ -92,7 +92,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         if (file.type === "application/pdf") {
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          const numPages = Math.min(pdf.numPages, 3); // Max 3 pages
+          const numPages = pdf.numPages; // اقرأ كل الصفحات
 
           for (let i = 1; i <= numPages; i++) {
             setImportStatus(`جاري معالجة الصفحة ${i} من ${numPages}...`);
