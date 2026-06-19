@@ -2,9 +2,10 @@
 
 export async function generateQuestionsFromImage(base64Images: string[]) {
   try {
-    const apiKey = process.env.GROQ_API_KEY;
+    // استخدمنا MISTRAL_API_KEY بدلاً من Groq
+    const apiKey = process.env.MISTRAL_API_KEY;
     if (!apiKey) {
-      throw new Error("لم يتم العثور على مفتاح Groq API في الإعدادات");
+      throw new Error("لم يتم العثور على مفتاح Mistral API في الإعدادات");
     }
 
     // Construct message content
@@ -45,14 +46,15 @@ export async function generateQuestionsFromImage(base64Images: string[]) {
       });
     }
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({
-        model: "llama-3.2-90b-vision-preview",
+        model: "pixtral-12b-2409", // موديل Mistral الخاص بقراءة الصور
         messages: [
           {
             role: "user",
@@ -66,7 +68,7 @@ export async function generateQuestionsFromImage(base64Images: string[]) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Groq API Error:", errorText);
+      console.error("Mistral API Error:", errorText);
       throw new Error(`خطأ في الاتصال بالذكاء الاصطناعي: ${response.status}`);
     }
 
