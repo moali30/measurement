@@ -35,7 +35,7 @@ export async function loadFormBySlug(slug: string) {
       .select('*')
       .eq('form_id', formDoc.id)
       .order('order_index', { ascending: true })
-      .limit(100);
+      .limit(1000);
 
     if (questionsError) {
       return { success: false, error: questionsError.message };
@@ -81,7 +81,26 @@ export async function submitFormResponse(
   try {
     const supabase = createAdminClient();
 
-    // Create response
+    // 1. Server-side Validation: Form Status
+    const { data: formDoc, error: fError } = await supabase.from('forms').select('status').eq('id', formId).single();
+    if (fError || !formDoc) return { success: false, error: 'Form not found' };
+    if (formDoc.status !== 'active') return { success: false, error: 'Form is closed' };
+
+    // 2. Server-side Validation: Required Questions
+    const { data: questions, error: qError } = await supabase.from('questions').select('id, required').eq('form_id', formId);
+    if (qError) return { success: false, error: qError.message };
+
+    const requiredQuestionIds = questions.filter(q => q.required).map(q => q.id);
+    const providedAnswers = answersData.filter(a => a.textValue?.trim() || a.numberValue !== null);
+    const providedAnswerIds = new Set(providedAnswers.map(a => a.questionId));
+
+    for (const reqId of requiredQuestionIds) {
+      if (!providedAnswerIds.has(reqId)) {
+        return { success: false, error: 'Missing required answer for a question' };
+      }
+    }
+
+    // 3. Create response
     const { data: response, error: responseError } = await supabase
       .from('responses')
       .insert({ form_id: formId, submitted_at: new Date().toISOString() })
@@ -111,10 +130,15 @@ export async function submitFormResponse(
       return { success: false, error: answersError.message };
     }
 
-    // Update response count (using RPC or direct update, direct for now)
-    const { data: formDoc } = await supabase.from('forms').select('responses_count').eq('id', formId).single();
-    if (formDoc) {
-      await supabase.from('forms').update({ responses_count: (formDoc.responses_count || 0) + 1 }).eq('id', formId);
+    // 4. Update response count (using RPC for concurrency safety, fallback to direct update)
+    const { error: rpcError } = await supabase.rpc('increment_responses_count', { row_id: formId });
+    
+    if (rpcError) {
+      // Fallback if RPC is not yet created by the user
+      const { data: formDocToUpdate } = await supabase.from('forms').select('responses_count').eq('id', formId).single();
+      if (formDocToUpdate) {
+        await supabase.from('forms').update({ responses_count: (formDocToUpdate.responses_count || 0) + 1 }).eq('id', formId);
+      }
     }
 
     return { success: true, responseId };

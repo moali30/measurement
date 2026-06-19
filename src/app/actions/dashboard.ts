@@ -59,7 +59,7 @@ export async function loadFormDetailServer(formId: string) {
     const { data: f, error: fError } = await supabase.from('forms').select('*').eq('id', formId).single();
     if (fError) throw fError;
 
-    const { data: qs } = await supabase.from('questions').select('*').eq('form_id', formId).order('order_index', { ascending: true }).limit(100);
+    const { data: qs } = await supabase.from('questions').select('*').eq('form_id', formId).order('order_index', { ascending: true }).limit(1000);
     const { data: rs } = await supabase.from('responses').select('id, submitted_at').eq('form_id', formId).order('submitted_at', { ascending: false }).limit(500);
     
     let answerDocs: any[] = [];
