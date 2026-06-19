@@ -6,6 +6,8 @@ import { Plus, Search, FileText, MoreHorizontal, Trash2, Share2, BarChart2, Eye,
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { listFormsServer, deleteFormServer, toggleFormStatusServer, duplicateFormServer } from "@/app/actions/dashboard";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 
 interface Form { $id: string; title: string; description: string; status: string; responsesCount: number; createdAt: string; slug: string; }
 
@@ -21,6 +23,7 @@ export default function FormsListPage() {
   const [sortMode, setSortMode] = useState<SortMode>("date_desc");
   const [groupByYear, setGroupByYear] = useState(false);
   const { user } = useAuth();
+  const { confirm } = useConfirm();
 
   useEffect(() => { if(user) loadForms(); }, [user]);
 
@@ -35,11 +38,12 @@ export default function FormsListPage() {
   };
 
   const deleteForm = async (id: string) => {
-    if(!confirm("هل أنت متأكد من حذف هذا الاستبيان؟")) return;
+    if(!(await confirm({ message: "هل أنت متأكد من حذف هذا الاستبيان؟" }))) return;
     try {
       const result = await deleteFormServer(id);
       if (result.success) {
         setForms(f => f.filter(x => x.$id !== id));
+        toast.success("تم الحذف بنجاح");
       }
     } catch(e) { console.error(e); }
     setOpenMenuId(null);
@@ -62,8 +66,9 @@ export default function FormsListPage() {
       const result = await duplicateFormServer(id);
       if (result.success) {
         await loadForms();
+        toast.success("تم نسخ الاستبيان بنجاح");
       } else {
-        alert("حدث خطأ أثناء نسخ الاستبيان");
+        toast.error("حدث خطأ أثناء نسخ الاستبيان");
       }
     } catch(e) { console.error(e); } finally { setLoading(false); setOpenMenuId(null); }
   };

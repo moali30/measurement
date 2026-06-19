@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
 import { createFormServer } from "@/app/actions/dashboard";
 import { generateQuestionsFromImage } from "@/app/actions/ai";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Set worker path to local unpkg or cloudflare
@@ -50,6 +52,7 @@ interface FormBuilderProps {
 
 export function FormBuilder({ initialTitle, initialDescription, initialQuestions, formId }: FormBuilderProps) {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   const [title, setTitle] = useState(initialTitle || "");
   const [description, setDescription] = useState(initialDescription || "");
   const [questions, setQuestions] = useState<Question[]>(initialQuestions || []);
@@ -160,7 +163,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         setImportStatus("تم بنجاح!");
       } catch (err: any) {
         console.error(err);
-        alert("حدث خطأ أثناء الاستيراد: " + (err?.message || ""));
+        toast.error("حدث خطأ أثناء الاستيراد: " + (err?.message || ""));
       } finally {
         setTimeout(() => setIsImporting(false), 1000);
       }
@@ -200,7 +203,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         if (type === "qualityLogo") setQualityLogo(url);
       } catch (e: any) { 
         console.error(e); 
-        alert("خطأ في رفع الصورة: " + (e?.message || "")); 
+        toast.error("خطأ في رفع الصورة: " + (e?.message || "")); 
       }
     };
     input.click();
@@ -276,12 +279,12 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
       const dateStr = prompt("أدخل تاريخ بداية الاستبيان (مثال: 2024-05-01):", new Date().toISOString().split('T')[0]);
       if (!dateStr) return;
       const startDate = new Date(dateStr);
-      if (isNaN(startDate.getTime())) { alert("تاريخ غير صحيح"); return; }
+      if (isNaN(startDate.getTime())) { toast.error("تاريخ غير صحيح"); return; }
       
       const daysStr = prompt("ما هي مدة جمع الردود بالأيام؟ (مثال: 10 أو 12):", "10");
       if (!daysStr) return;
       const maxDays = parseInt(daysStr, 10);
-      if (isNaN(maxDays) || maxDays < 1) { alert("مدة غير صحيحة"); return; }
+      if (isNaN(maxDays) || maxDays < 1) { toast.error("مدة غير صحيحة"); return; }
       
       setIsImporting(true);
       setImportProgress(0);
@@ -367,11 +370,11 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
         }
         
         setImportStatus("✅ تم الاستيراد بنجاح!");
-        alert(`تم استيراد جميع الردود (${totalRows}) بنجاح! 🎉`);
+        toast.success(`تم استيراد جميع الردود (${totalRows}) بنجاح! 🎉`);
         window.location.href = `/dashboard/forms/${newFormId}`;
       } catch (error: any) {
         console.error(error);
-        alert("حدث خطأ أثناء الاستيراد: " + (error?.message || "يرجى المحاولة مرة أخرى"));
+        toast.error("حدث خطأ أثناء الاستيراد: " + (error?.message || "يرجى المحاولة مرة أخرى"));
       } finally {
         setIsImporting(false);
         setImportProgress(0);
@@ -383,8 +386,8 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
   };
 
   const saveForm = async () => {
-    if (!title.trim()) { alert("يرجى إدخال عنوان الاستبيان"); return; }
-    if (questions.length === 0) { alert("يرجى إضافة سؤال واحد على الأقل"); return; }
+    if (!title.trim()) { toast.error("يرجى إدخال عنوان الاستبيان"); return; }
+    if (questions.length === 0) { toast.error("يرجى إضافة سؤال واحد على الأقل"); return; }
     setSaving(true);
     try {
       const slug = title.replace(/\s+/g, "-").replace(/[^\u0621-\u064Aa-zA-Z0-9-]/g, "").substring(0, 50) + "-" + Date.now().toString(36);
@@ -419,10 +422,11 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
 
       setSaved(true);
       setSavedSlug(slug);
+      toast.success("تم حفظ الاستبيان بنجاح");
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
       console.error(err);
-      alert("حدث خطأ أثناء الحفظ: " + (err?.message || ""));
+      toast.error("حدث خطأ أثناء الحفظ: " + (err?.message || ""));
     } finally {
       setSaving(false);
     }
@@ -671,7 +675,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
                           const finalName = editingCategory.new.trim();
                           if (finalName && finalName !== c) {
                             if (categories.includes(finalName)) {
-                              alert("هذا المحور موجود مسبقاً!");
+                              toast.error("هذا المحور موجود مسبقاً!");
                               return;
                             }
                             setCategories(categories.map(cat => cat === c ? finalName : cat));
@@ -688,7 +692,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
                       const finalName = editingCategory.new.trim();
                       if (finalName && finalName !== c) {
                         if (categories.includes(finalName)) {
-                          alert("هذا المحور موجود مسبقاً!");
+                          toast.error("هذا المحور موجود مسبقاً!");
                           return;
                         }
                         setCategories(categories.map(cat => cat === c ? finalName : cat));
@@ -703,8 +707,8 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
                     <span className="font-medium text-blue-800">{c}</span>
                     <div className="flex items-center mr-2 gap-1 border-r border-blue-200/50 pr-2">
                       <button onClick={() => setEditingCategory({ old: c, new: c })} className="text-blue-500 hover:text-blue-700 transition-colors p-1 hover:bg-blue-100 rounded" title="تعديل"><Edit2 size={14} /></button>
-                      <button onClick={() => {
-                        if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
+                      <button onClick={async () => {
+                        if (await confirm({ message: "هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به." })) {
                           setCategories(categories.filter(cat => cat !== c));
                           setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
                         }
@@ -894,7 +898,7 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
             className="rounded-xl flex gap-2 bg-gray-100 hover:bg-gray-200 text-gray-600"
             onClick={() => {
               if (savedSlug) { window.open(`/f/${savedSlug}`, '_blank'); }
-              else { alert('يرجى حفظ الاستبيان أولاً لمعاينته'); }
+              else { toast.warning('يرجى حفظ الاستبيان أولاً لمعاينته'); }
             }}
           >
             <Eye size={16} /> معاينة

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { UserPlus, User as UserIcon } from "lucide-react";
+import { toast } from "sonner";
 
 interface UserRecord {
   id: string;
@@ -61,7 +62,7 @@ export default function UsersManagementPage() {
 
     const res = await createUser(formData);
     if (res.success) {
-      alert("تم إنشاء الحساب بنجاح!");
+      toast.success("تم إنشاء الحساب بنجاح!");
       setName("");
       setEmail("");
       setPassword("");

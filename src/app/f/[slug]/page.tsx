@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Query, ID } from "appwrite";
 import { loadFormBySlug, submitFormResponse } from "@/app/actions/forms";
+import { toast } from "sonner";
 
 interface Question {
   $id: string;
@@ -133,7 +133,7 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
       setSubmitted(true);
     } catch (err) {
       console.error(err);
-      alert("حدث خطأ أثناء إرسال الإجابات. يرجى المحاولة مرة أخرى.");
+      toast.error("حدث خطأ أثناء إرسال الإجابات. يرجى المحاولة مرة أخرى.");
     } finally {
       setSubmitting(false);
     }

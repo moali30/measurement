@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, PenTool, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listSignaturesServer, addSignatureServer, deleteSignatureServer } from "@/app/actions/signatures";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 
 interface Signature {
   id: string;
@@ -13,6 +15,7 @@ interface Signature {
 }
 
 export default function SignaturesPage() {
+  const { confirm } = useConfirm();
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -61,13 +64,13 @@ export default function SignaturesPage() {
       setNewImage(url);
     } catch (e: any) {
       console.error(e);
-      alert("خطأ في معالجة الصورة: " + e.message);
+      toast.error("خطأ في معالجة الصورة: " + e.message);
     }
   };
 
   const handleAdd = async () => {
     if (!newName || !newImage) {
-      alert("يرجى كتابة اسم التوقيع واختيار الصورة");
+      toast.error("يرجى كتابة اسم التوقيع واختيار الصورة");
       return;
     }
     
@@ -78,8 +81,9 @@ export default function SignaturesPage() {
         setNewName("");
         setNewImage("");
         await loadSignatures();
+        toast.success("تمت إضافة التوقيع بنجاح");
       } else {
-        alert("فشل إضافة التوقيع");
+        toast.error("فشل إضافة التوقيع");
       }
     } catch (e) {
       console.error(e);
@@ -89,11 +93,12 @@ export default function SignaturesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا التوقيع؟")) return;
+    if (!(await confirm({ message: "هل أنت متأكد من حذف هذا التوقيع؟" }))) return;
     try {
       const res = await deleteSignatureServer(id);
       if (res.success) {
         setSignatures(s => s.filter(sig => sig.id !== id));
+        toast.success("تم حذف التوقيع بنجاح");
       }
     } catch (e) {
       console.error(e);

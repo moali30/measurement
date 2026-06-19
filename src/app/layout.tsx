@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/hooks/useAuth";
+import { Toaster } from "sonner";
+import { ConfirmProvider } from "@/components/providers/ConfirmProvider";
 
 const cairo = Cairo({ subsets: ["latin", "arabic"] });
 
@@ -19,7 +21,10 @@ export default function RootLayout({
     <html lang="ar" dir="rtl">
       <body className={cairo.className}>
         <AuthProvider>
-          {children}
+          <ConfirmProvider>
+            {children}
+          </ConfirmProvider>
+          <Toaster position="bottom-center" richColors />
         </AuthProvider>
       </body>
     </html>

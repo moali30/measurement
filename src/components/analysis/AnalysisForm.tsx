@@ -6,6 +6,7 @@ import { Axis, ReportData } from '@/types/analysis';
 import { Upload, FileText, Calendar, Edit3, Image as ImageIcon, Plus, Trash2, Play, Database, PenTool } from 'lucide-react';
 import { listFormsServer, loadFormDetailServer } from '@/app/actions/dashboard';
 import { listSignaturesServer } from '@/app/actions/signatures';
+import { toast } from 'sonner';
 
 interface AnalysisFormProps {
   onGenerate: (data: Partial<ReportData>, rawData: Record<string, any>[]) => void;
@@ -140,13 +141,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
     if (dataSource === 'db') {
       if (!selectedFormId) {
-        alert('يرجى اختيار استبيان من القائمة أولاً');
+        toast.warning('يرجى اختيار استبيان من القائمة أولاً');
         return;
       }
       
       const result = await loadFormDetailServer(selectedFormId);
       if (!result.success || !result.form) {
-        alert('حدث خطأ أثناء تحميل بيانات الاستبيان: ' + result.error);
+        toast.error('حدث خطأ أثناء تحميل بيانات الاستبيان: ' + result.error);
         return;
       }
 
@@ -187,7 +188,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       onGenerate(baseData, rawData);
     } else {
       if (!file) {
-        alert('يرجى رفع ملف البيانات أولاً');
+        toast.warning('يرجى رفع ملف البيانات أولاً');
         return;
       }
 
@@ -204,7 +205,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
             const firstSheet = workbook.SheetNames[0];
             rawData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
           } else {
-            alert('صيغة الملف غير مدعومة. يرجى استخدام Excel أو CSV أو JSON');
+            toast.error('صيغة الملف غير مدعومة. يرجى استخدام Excel أو CSV أو JSON');
             return;
           }
 
@@ -212,7 +213,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
         } catch (error) {
           console.error('Error processing file:', error);
-          alert('حدث خطأ في معالجة الملف');
+          toast.error('حدث خطأ في معالجة الملف');
         }
       };
 

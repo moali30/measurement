@@ -8,6 +8,8 @@ import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer } from "@/app/actions/dashboard";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 
 export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
 
@@ -34,6 +36,7 @@ type Tab = "edit" | "responses" | "individual";
 
 export default function FormDetailPage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   const [form, setForm] = useState<FormData | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [responses, setResponses] = useState<Response[]>([]);
@@ -120,7 +123,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     try {
       const descToSave = String(form.description || "").substring(0, 2000);
       const formResult = await updateFormServer(form.$id, { title: String(form.title || "").substring(0, 255), description: descToSave });
-      if (!formResult.success) { alert("خطأ في حفظ بيانات الاستبيان: " + (formResult.error || "")); setSaving(false); isSavingRef.current = false; return; }
+      if (!formResult.success) { toast.error("خطأ في حفظ بيانات الاستبيان: " + (formResult.error || "")); setSaving(false); isSavingRef.current = false; return; }
       
       const snapshot = [...questions];
       const newIdMap = new Map<string, string>();
@@ -158,7 +161,8 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       const nextSavedQuestions = snapshot.map(q => newIdMap.has(q.$id) ? { ...q, $id: newIdMap.get(q.$id)! } : q);
       lastSavedData.current = JSON.stringify({ form: { ...form, description: descToSave }, questions: nextSavedQuestions, deletedQuestionsIds: [] });
       setSaved(true);
-    } catch (e) { console.error(e); alert("خطأ أثناء الحفظ"); }
+      toast.success("تم الحفظ بنجاح");
+    } catch (e) { console.error(e); toast.error("خطأ أثناء الحفظ"); }
     finally { setSaving(false); isSavingRef.current = false; }
   };
 
@@ -211,7 +215,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         }));
         setQuestions(prev => [...prev, ...newQs]);
       } catch (err: any) {
-        alert("حدث خطأ أثناء قراءة الأسئلة: " + err.message);
+        toast.error("حدث خطأ أثناء قراءة الأسئلة: " + err.message);
       }
     };
     input.click();
@@ -259,7 +263,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         setForm({ ...form, [type]: url });
       } catch (e: any) { 
         console.error(e); 
-        alert("خطأ في رفع الصورة: " + (e?.message || "")); 
+        toast.error("خطأ في رفع الصورة: " + (e?.message || "")); 
       }
     };
     input.click();
@@ -299,7 +303,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       const dateStr = prompt("أدخل تاريخ الاستبيان (مثال: 2024-05-01):", new Date().toISOString().split('T')[0]);
       if (!dateStr) return;
       const startDate = new Date(dateStr);
-      if (isNaN(startDate.getTime())) { alert("تاريخ غير صحيح"); return; }
+      if (isNaN(startDate.getTime())) { toast.error("تاريخ غير صحيح"); return; }
       setSaving(true);
       try {
         const XLSX = await import("xlsx");
@@ -338,9 +342,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
             }
           }
         }
-        alert("تم استيراد الأسئلة والإجابات بنجاح!");
+        toast.success("تم استيراد الأسئلة والإجابات بنجاح!");
         loadAll();
-      } catch (error) { console.error(error); alert("حدث خطأ أثناء الاستيراد."); }
+      } catch (error) { console.error(error); toast.error("حدث خطأ أثناء الاستيراد."); }
       finally { setSaving(false); }
     };
     input.click();
@@ -350,15 +354,15 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
     if (!form) return;
     const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
     if (!nameQ) {
-      alert("يرجى إضافة سؤال 'الاسم' باستخدام الزر المخصص أولاً!");
+      toast.error("يرجى إضافة سؤال 'الاسم' باستخدام الزر المخصص أولاً!");
       return;
     }
     if (nameQ.$id.startsWith("new_")) {
-      alert("لقد قمت بإضافة سؤال الاسم ولكن لم تقم بحفظه. يرجى الضغط على 'حفظ التعديلات' أولاً، ثم حاول التوزيع مرة أخرى!");
+      toast.error("لقد قمت بإضافة سؤال الاسم ولكن لم تقم بحفظه. يرجى الضغط على 'حفظ التعديلات' أولاً، ثم حاول التوزيع مرة أخرى!");
       return;
     }
     if (responses.length === 0) {
-      alert("لا توجد ردود حالية لتوزيع الأسماء عليها!");
+      toast.error("لا توجد ردود حالية لتوزيع الأسماء عليها!");
       return;
     }
     const input = document.createElement("input");
@@ -370,7 +374,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       const pctStr = prompt("ما هي نسبة الردود التي تريد أن تظل مجهولة بدون اسم؟ (أدخل رقم من 0 إلى 100، مثال: 20)", "20");
       if (!pctStr) return;
       const anonPct = parseInt(pctStr, 10);
-      if (isNaN(anonPct) || anonPct < 0 || anonPct > 100) { alert("نسبة غير صحيحة"); return; }
+      if (isNaN(anonPct) || anonPct < 0 || anonPct > 100) { toast.error("نسبة غير صحيحة"); return; }
       setSaving(true);
       try {
         const XLSX = await import("xlsx");
@@ -381,14 +385,14 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         const names = rows.flat().map(n => String(n || "").trim()).filter(n => n.length > 0);
         if (names.length === 0) throw new Error("ملف الإكسيل لا يحتوي على أسماء");
         const countToAssign = Math.floor(responses.length * (1 - (anonPct / 100)));
-        if (countToAssign <= 0) { alert("بناءً على النسبة، لن يتم تعيين أي أسماء."); setSaving(false); return; }
+        if (countToAssign <= 0) { toast.error("بناءً على النسبة، لن يتم تعيين أي أسماء."); setSaving(false); return; }
         
         let shuffledResponses = [...responses].sort(() => 0.5 - Math.random());
         let selectedResponses = shuffledResponses.slice(0, countToAssign);
         const shuffledNames = [...names].sort(() => 0.5 - Math.random());
         
         if (selectedResponses.length > shuffledNames.length) {
-          alert(`تحذير: عدد الردود المطلوب تعيين أسماء لها (${selectedResponses.length}) أكبر من عدد الأسماء المتاحة في ملف الإكسيل (${shuffledNames.length}). سيتم توزيع الأسماء المتاحة فقط لضمان عدم تكرار أي اسم.`);
+          toast.warning(`تحذير: عدد الردود المطلوب تعيين أسماء لها (${selectedResponses.length}) أكبر من عدد الأسماء المتاحة في ملف الإكسيل (${shuffledNames.length}). سيتم توزيع الأسماء المتاحة فقط لضمان عدم تكرار أي اسم.`);
           selectedResponses = selectedResponses.slice(0, shuffledNames.length);
         }
 
@@ -398,9 +402,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         }));
         const res = await bulkAddAnswers(form.$id, nameQ.$id, answersList);
         if (!res.success) throw new Error(res.error);
-        alert("تم توزيع الأسماء بنجاح!");
+        toast.success("تم توزيع الأسماء بنجاح!");
         loadAll();
-      } catch (error: any) { console.error(error); alert("حدث خطأ أثناء التوزيع: " + (error?.message || "")); }
+      } catch (error: any) { console.error(error); toast.error("حدث خطأ أثناء التوزيع: " + (error?.message || "")); }
       finally { setSaving(false); }
     };
     input.click();
@@ -409,18 +413,18 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const resetNameDistribution = async () => {
     if (!form) return;
     const nameQ = questions.find(q => q.text.includes("الاسم") || q.text.includes("اسم"));
-    if (!nameQ) { alert("لا يوجد سؤال 'الاسم' في هذا الاستبيان."); return; }
-    if (nameQ.$id.startsWith("new_")) { alert("سؤال الاسم لم يُحفظ بعد."); return; }
+    if (!nameQ) { toast.error("لا يوجد سؤال 'الاسم' في هذا الاستبيان."); return; }
+    if (nameQ.$id.startsWith("new_")) { toast.error("سؤال الاسم لم يُحفظ بعد."); return; }
     const nameAnswers = answers.filter(a => a.questionId === nameQ.$id);
-    if (nameAnswers.length === 0) { alert("لا توجد أسماء موزعة حالياً."); return; }
-    if (!confirm(`هل أنت متأكد من إلغاء توزيع الأسماء؟\n\nسيتم حذف ${nameAnswers.length} اسم من الردود.\nيمكنك إعادة التوزيع بعد ذلك.`)) return;
+    if (nameAnswers.length === 0) { toast.error("لا توجد أسماء موزعة حالياً."); return; }
+    if (!(await confirm({ message: `هل أنت متأكد من إلغاء توزيع الأسماء؟\n\nسيتم حذف ${nameAnswers.length} اسم من الردود.\nيمكنك إعادة التوزيع بعد ذلك.` }))) return;
     setSaving(true);
     try {
       const result = await deleteAnswersByQuestionServer(form.$id, nameQ.$id);
       if (!result.success) throw new Error(result.error);
-      alert(`تم إلغاء توزيع الأسماء بنجاح! (${result.deleted} اسم)`);
+      toast.success(`تم إلغاء توزيع الأسماء بنجاح! (${result.deleted} اسم)`);
       loadAll();
-    } catch (error: any) { console.error(error); alert("خطأ: " + (error?.message || "")); }
+    } catch (error: any) { console.error(error); toast.error("خطأ: " + (error?.message || "")); }
     finally { setSaving(false); }
   };
 
@@ -608,7 +612,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
         }
         const blob = await zip.generateAsync({ type: "blob" });
         saveAs(blob, `${form.title}_PDFs.zip`);
-      } catch (e: any) { console.error("PDF export error:", e); alert("خطأ أثناء إنشاء الملفات: " + (e?.message || "يرجى المحاولة مرة أخرى")); }
+      } catch (e: any) { console.error("PDF export error:", e); toast.error("خطأ أثناء إنشاء الملفات: " + (e?.message || "يرجى المحاولة مرة أخرى")); }
       finally {
         if (iframe && document.body.contains(iframe)) document.body.removeChild(iframe);
         setPrintingPdf(false);
@@ -711,7 +715,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       }
       const fileName = studentName ? `${studentName}.pdf` : `response_${responseIndex + 1}.pdf`;
       saveAs(new Blob([pdf.output("arraybuffer")], { type: "application/pdf" }), fileName);
-    } catch (e: any) { console.error(e); alert("خطأ: " + (e?.message || "")); }
+    } catch (e: any) { console.error(e); toast.error("خطأ: " + (e?.message || "")); }
     finally { if (iframe && document.body.contains(iframe)) document.body.removeChild(iframe); setPrintingPdf(false); }
   };
 
@@ -951,15 +955,15 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                         if (newName && newName.trim() && newName.trim() !== c) {
                           const finalName = newName.trim();
                           if (categories.includes(finalName)) {
-                            alert("هذا المحور موجود مسبقاً!");
+                            toast.error("هذا المحور موجود مسبقاً!");
                             return;
                           }
                           setCategories(categories.map(cat => cat === c ? finalName : cat));
                           setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: finalName } : q));
                         }
                       }} className="text-blue-500 hover:text-blue-700 transition-colors" title="تعديل"><Edit2 size={12} /></button>
-                      <button onClick={() => {
-                        if (confirm("هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به.")) {
+                      <button onClick={async () => {
+                        if (await confirm({ message: "هل أنت متأكد من حذف هذا المحور؟ سيتم فصله عن الأسئلة المرتبطة به." })) {
                           setCategories(categories.filter(cat => cat !== c));
                           setQuestions(qs => qs.map(q => q.minLabel === c ? { ...q, minLabel: undefined } : q));
                         }

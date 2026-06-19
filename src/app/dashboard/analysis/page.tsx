@@ -9,6 +9,7 @@ import { ReportData } from '@/types/analysis';
 import { Printer, Download, Save } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { toast } from 'sonner';
 
 export default function AnalysisPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -55,7 +56,7 @@ export default function AnalysisPage() {
       doc.save(`${reportData.title || 'report'}.pdf`);
     } catch (error) {
       console.error('PDF Export Error:', error);
-      alert('حدث خطأ أثناء تصدير الـ PDF');
+      toast.error('حدث خطأ أثناء تصدير الـ PDF');
     } finally {
       setIsExporting(false);
     }
@@ -72,7 +73,7 @@ export default function AnalysisPage() {
        link.click();
      } catch (err) {
         console.error(err);
-        alert('حدث خطأ أثناء تصدير الـ PNG');
+        toast.error('حدث خطأ أثناء تصدير الـ PNG');
      } finally {
         setIsExporting(false);
      }
