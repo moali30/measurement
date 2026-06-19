@@ -91,7 +91,7 @@ export async function submitFormResponse(
     if (qError) return { success: false, error: qError.message };
 
     const requiredQuestionIds = questions.filter(q => q.required).map(q => q.id);
-    const providedAnswers = answersData.filter(a => a.textValue?.trim() || a.numberValue !== null);
+    const providedAnswers = answersData.filter(a => Boolean(a.textValue?.trim()) || (a.numberValue !== null && a.numberValue !== undefined));
     const providedAnswerIds = new Set(providedAnswers.map(a => a.questionId));
 
     for (const reqId of requiredQuestionIds) {
