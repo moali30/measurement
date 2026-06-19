@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight, FileText, Edit2 } from "lucide-react";
+import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight, FileText, Edit2, Check } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer } from "@/app/actions/dashboard";
@@ -45,6 +45,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
   const [exporting, setExporting] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [editingCategory, setEditingCategory] = useState<{old: string, new: string} | null>(null);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryText, setNewCategoryText] = useState("");
   const [selectedResponse, setSelectedResponse] = useState<Response | null>(null);
   const [currentResponseIndex, setCurrentResponseIndex] = useState(0);
   const [deletedQuestionsIds, setDeletedQuestionsIds] = useState<string[]>([]);

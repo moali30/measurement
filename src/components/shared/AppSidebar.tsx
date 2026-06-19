@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   Users,
   BarChart,
-  PenTool
+  PenTool,
+  Database
 } from "lucide-react";
 import { useState } from "react";
 
@@ -25,6 +26,7 @@ export function AppSidebar() {
     { name: "الاستبيانات", href: "/dashboard/forms", icon: FileText },
     { name: "التحليل والتقارير", href: "/dashboard/analysis", icon: BarChart },
     { name: "التوقيعات", href: "/dashboard/signatures", icon: PenTool },
+    { name: "الاستهلاك والخطة", href: "/dashboard/plan", icon: Database },
   ];
 
   if (user?.email === "admin@aems.app") {
