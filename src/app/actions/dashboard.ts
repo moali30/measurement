@@ -251,6 +251,30 @@ export async function deleteQuestionServer(questionId: string) {
   }
 }
 
+export async function deleteResponseServer(responseId: string, formId: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete answers first
+    const { error: ansError } = await supabase.from('response_answers').delete().eq('response_id', responseId);
+    if (ansError) throw ansError;
+    
+    // Delete response
+    const { error: respError } = await supabase.from('responses').delete().eq('id', responseId);
+    if (respError) throw respError;
+    
+    // Decrement responses count
+    const { data: form } = await supabase.from('forms').select('responses_count').eq('id', formId).single();
+    if (form && form.responses_count > 0) {
+      await supabase.from('forms').update({ responses_count: form.responses_count - 1 }).eq('id', formId);
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function enableSingleResponseForAllServer() {
   try {
     const supabase = createAdminClient();

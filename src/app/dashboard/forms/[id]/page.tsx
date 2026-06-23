@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight, FileText, Edit2, Check } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
-import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer } from "@/app/actions/dashboard";
+import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer, deleteResponseServer } from "@/app/actions/dashboard";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
 
@@ -426,6 +426,34 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
       loadAll();
     } catch (error: any) { console.error(error); toast.error("خطأ: " + (error?.message || "")); }
     finally { setSaving(false); }
+  };
+
+  const handleDeleteResponse = async (responseId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!form) return;
+    if (!(await confirm({ message: "هل أنت متأكد من حذف هذا الرد نهائياً؟ لا يمكن التراجع عن هذا الإجراء." }))) return;
+    
+    setSaving(true);
+    try {
+      const result = await deleteResponseServer(responseId, form.$id);
+      if (result.success) {
+        toast.success("تم حذف الرد بنجاح");
+        setResponses(prev => prev.filter(r => r.$id !== responseId));
+        setAnswers(prev => prev.filter(a => a.responseId !== responseId));
+        if (selectedResponse?.$id === responseId) {
+          setSelectedResponse(null);
+        }
+        if (responses.length - 1 <= currentResponseIndex && currentResponseIndex > 0) {
+          setCurrentResponseIndex(prev => prev - 1);
+        }
+      } else {
+        toast.error("حدث خطأ أثناء حذف الرد: " + result.error);
+      }
+    } catch (error: any) {
+      toast.error("حدث خطأ أثناء حذف الرد");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getBase64ImageFromUrl = async (imageUrl: string) => {
@@ -1198,6 +1226,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                     <div className="flex items-center gap-3"><span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold group-hover:bg-blue-100">{ri + 1}</span><span className="text-sm text-gray-700">رد #{ri + 1}</span></div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">{fmtDate(r.submittedAt)}</span>
+                      <button onClick={(e) => handleDeleteResponse(r.$id, e)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100" title="حذف الرد"><Trash2 size={14} /></button>
                       <Eye size={14} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
                     </div>
                   </div>
@@ -1216,7 +1245,10 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                     <h3 className="text-lg font-bold text-gray-900">تفاصيل الرد #{responses.indexOf(selectedResponse) + 1}</h3>
                     <p className="text-xs text-gray-500 mt-0.5">{fmtDate(selectedResponse.submittedAt)}</p>
                   </div>
-                  <button onClick={() => setSelectedResponse(null)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleDeleteResponse(selectedResponse.$id)} className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors" title="حذف الرد"><Trash2 size={20} /></button>
+                    <button onClick={() => setSelectedResponse(null)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
+                  </div>
                 </div>
                 {/* Answers */}
                 <div className="overflow-y-auto max-h-[65vh] p-6 space-y-4">
@@ -1301,6 +1333,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                             <p className="text-sm text-gray-500 mt-0.5">رد #{currentResponseIndex + 1} من {responses.length} • {fmtDate(r.submittedAt)}</p>
                           </div>
                           <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleDeleteResponse(r.$id)} className="rounded-xl h-9 flex gap-1.5 px-3 text-xs text-red-600 border-red-200 hover:bg-red-50">
+                              <Trash2 size={14}/>حذف الرد
+                            </Button>
                             <Button variant="outline" size="sm" disabled={printingPdf} onClick={() => exportSinglePDF(currentResponseIndex)} className="rounded-xl h-9 flex gap-1.5 px-3 text-xs">
                               <Printer size={14}/>{printingPdf ? "جاري..." : "تصدير PDF"}
                             </Button>
