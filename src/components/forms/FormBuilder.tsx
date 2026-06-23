@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp, Upload, FileText, Edit2, X, Check } from "lucide-react";
+import { Plus, Trash2, GripVertical, Save, Eye, Copy, ChevronDown, Star, ToggleLeft, AlignRight, CheckSquare, List, Hash, Calendar, ThumbsUp, Upload, FileText, Edit2, X, Check, FileUp } from "lucide-react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { createFormWithQuestions, importBatchResponses } from "@/app/actions/import";
@@ -15,7 +15,7 @@ import * as pdfjsLib from "pdfjs-dist";
 // Set worker path to local unpkg or cloudflare
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
+export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix" | "file";
 
 const QUESTION_TYPES: { value: QuestionType; label: string; icon: React.ReactNode }[] = [
   { value: "multiple_choice", label: "اختيار من متعدد", icon: <List size={16} /> },
@@ -27,6 +27,7 @@ const QUESTION_TYPES: { value: QuestionType; label: string; icon: React.ReactNod
   { value: "yes_no", label: "نعم / لا", icon: <ThumbsUp size={16} /> },
   { value: "linear_scale", label: "مقياس خطي", icon: <Hash size={16} /> },
   { value: "date", label: "تاريخ", icon: <Calendar size={16} /> },
+  { value: "file", label: "رفع ملف", icon: <FileUp size={16} /> },
 ];
 
 const LIKERT_OPTIONS = ["موافق جداً", "موافق", "محايد", "غير موافق", "غير موافق جداً"];
@@ -499,6 +500,9 @@ export function FormBuilder({ initialTitle, initialDescription, initialQuestions
 
       case "date":
         return <div className="mt-4 px-4 py-3 border border-gray-200 rounded-xl text-gray-400 text-sm bg-gray-50">📅 يوم / شهر / سنة</div>;
+
+      case "file":
+        return <div className="mt-4 px-4 py-3 border border-gray-200 rounded-xl text-gray-400 text-sm bg-gray-50 flex items-center gap-2"><FileUp size={16}/> سيتمكن المستخدم من رفع ملف هنا</div>;
 
       default:
         return null;
