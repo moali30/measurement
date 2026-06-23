@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { loadFormBySlug, submitFormResponse } from "@/app/actions/forms";
+import { loadFormBySlug, submitFormResponse, uploadFormFile } from "@/app/actions/forms";
 import { toast } from "sonner";
 
 interface Question {
@@ -391,6 +391,41 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
                 {q.type === "date" && (
                   <input type="date" value={(answers[q.$id] as string) || ""} onChange={e => setAnswer(q.$id, e.target.value)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400" />
+                )}
+
+                {/* File */}
+                {q.type === "file" && (
+                  <div>
+                    <input type="file" onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      const tId = toast.loading("جاري رفع الملف...");
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        const res = await uploadFormFile(formData);
+                        if (res.success && res.url) {
+                          setAnswer(q.$id, res.url);
+                          toast.success("تم رفع الملف بنجاح", { id: tId });
+                        } else {
+                          toast.error(res.error || "حدث خطأ أثناء الرفع", { id: tId });
+                          e.target.value = "";
+                        }
+                      } catch (err) {
+                        toast.error("حدث خطأ أثناء الرفع", { id: tId });
+                        e.target.value = "";
+                      }
+                    }}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer" />
+                    
+                    {answers[q.$id] && typeof answers[q.$id] === "string" && (answers[q.$id] as string).startsWith("http") && (
+                      <div className="mt-3 text-sm text-emerald-600 flex items-center gap-1 bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        تم إرفاق الملف بنجاح
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Validation Error */}

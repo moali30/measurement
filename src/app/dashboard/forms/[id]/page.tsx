@@ -4,14 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { ID } from "appwrite";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight, FileText, Edit2, Check } from "lucide-react";
+import { ArrowRight, Edit3, BarChart2, Download, FileSpreadsheet, Printer, Trash2, Plus, Save, GripVertical, Star, CheckSquare, List, AlignRight, ChevronDown, ToggleLeft, ThumbsUp, Hash, Calendar, Copy, Eye, Upload, Image, X, Users, ChevronLeft, ChevronRight, FileText, Edit2, Check, FileUp } from "lucide-react";
 import Link from "next/link";
 import { bulkAddAnswers } from "@/app/actions/import";
 import { loadFormDetailServer, updateFormServer, saveQuestionServer, createResponseServer, createAnswerServer, deleteAnswersByQuestionServer, deleteQuestionServer, deleteResponseServer } from "@/app/actions/dashboard";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
 
-export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix";
+export type QuestionType = "multiple_choice" | "checkbox" | "text" | "rating" | "likert" | "dropdown" | "yes_no" | "linear_scale" | "date" | "matrix" | "file";
 
 const QUESTION_TYPES: { value: QuestionType; label: string; icon: React.ReactNode }[] = [
   { value: "multiple_choice", label: "اختيار من متعدد", icon: <List size={16} /> },
@@ -23,6 +23,7 @@ const QUESTION_TYPES: { value: QuestionType; label: string; icon: React.ReactNod
   { value: "yes_no", label: "نعم / لا", icon: <ThumbsUp size={16} /> },
   { value: "linear_scale", label: "مقياس خطي", icon: <Hash size={16} /> },
   { value: "date", label: "تاريخ", icon: <Calendar size={16} /> },
+  { value: "file", label: "رفع ملف", icon: <FileUp size={16} /> },
 ];
 
 const LIKERT_OPTIONS = ["موافق جداً", "موافق", "محايد", "غير موافق", "غير موافق جداً"];
@@ -603,7 +604,11 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
               if (a) {
                 let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
                 if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); }
-                else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } }
+                else if (valStr) { 
+                  ansText = valStr; 
+                  if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } 
+                  if (q.type === "file") { ansText = "ملف مرفق: " + valStr; }
+                }
               }
               const qEl = doc.createElement("div");
               qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${globalIdx % 2 === 0 ? '#f8f8f8' : 'white'};`;
@@ -724,7 +729,7 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
           gIdx++;
           const a = answers.find(ans => ans.responseId === r.$id && ans.questionId === q.$id);
           let ansText = "—";
-          if (a) { let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : ""); if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); } else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } } }
+          if (a) { let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : ""); if (a.selectedOptions?.length) { ansText = a.selectedOptions.join("، "); } else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && !q.options.includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } if (q.type === "file") { ansText = "ملف مرفق: " + valStr; } } }
           const qEl = doc.createElement("div");
           qEl.style.cssText = `border-bottom: 1px solid #ddd; padding: 10px 16px; margin-bottom: 2px; background: ${gIdx % 2 === 0 ? '#f8f8f8' : 'white'};`;
           qEl.innerHTML = `<div style="display: flex; align-items: flex-start; gap: 10px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #333; color: #111; font-size: 12px; font-weight: 700; flex-shrink: 0;">${gIdx}</span><div style="flex: 1;"><h3 style="font-size: 13px; font-weight: 600; color: #111; margin: 0 0 4px 0;">${q.text}</h3><div style="display: inline-block; font-size: 12px; padding: 3px 12px; ${ansText === '—' ? 'color: #999; font-style: italic;' : 'font-weight: 600; color: #000; border-bottom: 1px solid #000;'}">${ansText}</div></div></div>`;
@@ -898,6 +903,9 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
 
       case "date":
         return <div className="mt-4 px-4 py-3 border border-gray-200 rounded-xl text-gray-400 text-sm bg-gray-50">📅 يوم / شهر / سنة</div>;
+
+      case "file":
+        return <div className="mt-4 px-4 py-3 border border-gray-200 rounded-xl text-gray-400 text-sm bg-gray-50 flex items-center gap-2"><FileUp size={16}/> سيتمكن المستخدم من رفع ملف هنا</div>;
 
       default:
         return null;
@@ -1266,6 +1274,19 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                         }
                       }
                     }
+                    if (q.type === "file" && ansText !== "—" && ansText.startsWith("http")) {
+                      return (
+                        <div key={q.$id} className="border-b border-gray-100 pb-3 last:border-0">
+                          <div className="flex items-start gap-2">
+                            <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{qi + 1}</span>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-gray-800 mb-1">{q.text}</p>
+                              <a href={ansText} target="_blank" rel="noopener noreferrer" className="text-sm px-3 py-1.5 rounded-lg inline-block bg-blue-50 text-blue-700 font-medium underline flex items-center gap-1 w-fit"><FileUp size={14}/> عرض الملف</a>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={q.$id} className="border-b border-gray-100 pb-3 last:border-0">
                         <div className="flex items-start gap-2">
@@ -1369,6 +1390,17 @@ export default function FormDetailPage({ params }: { params: { id: string } }) {
                                   let valStr = a.textValue || (a.numberValue !== undefined && a.numberValue !== null ? String(a.numberValue) : "");
                                   if (a.selectedOptions && a.selectedOptions.length) { ansText = a.selectedOptions.join("، "); }
                                   else if (valStr) { ansText = valStr; if (q.type === "likert" && ["1","2","3","4","5"].includes(valStr) && q.options.length === 5) { ansText = q.options[5 - parseInt(valStr)]; } }
+                                }
+                                if (q.type === "file" && ansText !== "—" && ansText.startsWith("http")) {
+                                  return (
+                                    <div key={q.$id} className="px-6 py-4 flex items-start gap-4">
+                                      <span className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">{gIdx}</span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-gray-800 mb-1.5">{q.text}</p>
+                                        <a href={ansText} target="_blank" rel="noopener noreferrer" className="text-sm px-4 py-2 rounded-xl inline-block bg-blue-50 text-blue-700 font-medium border border-blue-200 underline flex items-center gap-1 w-fit"><FileUp size={14}/> عرض الملف</a>
+                                      </div>
+                                    </div>
+                                  );
                                 }
                                 return (
                                   <div key={q.$id} className="px-6 py-4 flex items-start gap-4">

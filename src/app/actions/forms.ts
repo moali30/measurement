@@ -146,3 +146,36 @@ export async function submitFormResponse(
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Upload a file for a form response
+ */
+export async function uploadFormFile(formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    if (!file) return { success: false, error: 'No file provided' };
+
+    const supabase = createAdminClient();
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    
+    // Generate a unique filename
+    const ext = file.name.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+
+    const { data, error } = await supabase.storage.from('form_files').upload(fileName, buffer, {
+      contentType: file.type,
+      upsert: false
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('form_files').getPublicUrl(fileName);
+
+    return { success: true, url: publicUrl };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
