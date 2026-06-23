@@ -49,3 +49,21 @@ export async function listUsers() {
     return { success: false, error: error.message };
   }
 }
+
+export async function updateUserPassword(userId: string, newPassword: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password: newPassword
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

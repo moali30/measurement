@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createUser, listUsers } from "@/app/actions/users";
+import { createUser, listUsers, updateUserPassword } from "@/app/actions/users";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { UserPlus, User as UserIcon } from "lucide-react";
+import { UserPlus, User as UserIcon, Key } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserRecord {
@@ -26,6 +26,10 @@ export default function UsersManagementPage() {
   const [password, setPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
+
+  const [passwordChangeUserId, setPasswordChangeUserId] = useState<string | null>(null);
+  const [newPasswordForUser, setNewPasswordForUser] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -71,6 +75,23 @@ export default function UsersManagementPage() {
       setError(res.error || "حدث خطأ أثناء إنشاء الحساب");
     }
     setIsCreating(false);
+  };
+
+  const handleUpdatePassword = async (userId: string) => {
+    if (newPasswordForUser.length < 8) {
+      toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+      return;
+    }
+    setIsChangingPassword(true);
+    const res = await updateUserPassword(userId, newPasswordForUser);
+    if (res.success) {
+      toast.success("تم تغيير كلمة المرور بنجاح");
+      setPasswordChangeUserId(null);
+      setNewPasswordForUser("");
+    } else {
+      toast.error(res.error || "حدث خطأ أثناء تغيير كلمة المرور");
+    }
+    setIsChangingPassword(false);
   };
 
   if (loading || user?.email !== "admin@aems.app") return null;
@@ -134,6 +155,7 @@ export default function UsersManagementPage() {
                   <th className="px-6 py-3 font-semibold text-gray-600">الاسم</th>
                   <th className="px-6 py-3 font-semibold text-gray-600">البريد الإلكتروني</th>
                   <th className="px-6 py-3 font-semibold text-gray-600">تاريخ التسجيل</th>
+                  <th className="px-6 py-3 font-semibold text-gray-600 text-left">إجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -144,6 +166,48 @@ export default function UsersManagementPage() {
                     </td>
                     <td className="px-6 py-3 text-gray-500">{u.email}</td>
                     <td className="px-6 py-3 text-gray-400">{new Date(u.registration).toLocaleDateString('ar-SA')}</td>
+                    <td className="px-6 py-3 text-left">
+                      {passwordChangeUserId === u.id ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <input 
+                            type="password" 
+                            placeholder="كلمة المرور الجديدة"
+                            value={newPasswordForUser}
+                            onChange={(e) => setNewPasswordForUser(e.target.value)}
+                            className="px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 w-36"
+                          />
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleUpdatePassword(u.id)}
+                            disabled={isChangingPassword}
+                            className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3"
+                          >
+                            حفظ
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => {
+                              setPasswordChangeUserId(null);
+                              setNewPasswordForUser("");
+                            }}
+                            className="h-8 text-gray-500 hover:bg-gray-200"
+                          >
+                            إلغاء
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => setPasswordChangeUserId(u.id)}
+                          className="h-8 text-gray-600 border-gray-200 hover:bg-gray-100 bg-white"
+                        >
+                          <Key size={14} className="ml-1.5" />
+                          تغيير المرور
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
