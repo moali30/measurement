@@ -15,7 +15,33 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[]): P
   const results: QuestionResult[] = [];
 
   questions.forEach((question, index) => {
-    const answers = data.map(row => parseFloat(row[question]) || 0);
+    const answers = data.map(row => {
+      let val = row[question];
+      if (typeof val === 'string') {
+        const cleanVal = val.trim();
+        const likertMap: Record<string, number> = {
+          "موافق جداً": 5, "موافق جدا": 5,
+          "موافق": 4,
+          "محايد": 3, "إلى حد ما": 3,
+          "غير موافق": 2,
+          "غير موافق جداً": 1, "غير موافق جدا": 1,
+          "ممتاز": 5,
+          "جيد جداً": 4, "جيد جدا": 4,
+          "جيد": 3,
+          "مقبول": 2,
+          "ضعيف": 1,
+          "دائماً": 5, "دائما": 5,
+          "غالباً": 4, "غالبا": 4,
+          "أحياناً": 3, "أحيانا": 3,
+          "نادراً": 2, "نادرا": 2,
+          "أبداً": 1, "أبدا": 1,
+          "نعم": 5,
+          "لا": 1
+        };
+        if (likertMap[cleanVal]) return likertMap[cleanVal];
+      }
+      return parseFloat(val as string) || 0;
+    });
     const sum = answers.reduce((a, b) => a + b, 0);
     const count = answers.length;
     const mean = count > 0 ? sum / count : 0;
