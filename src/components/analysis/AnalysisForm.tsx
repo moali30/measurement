@@ -69,19 +69,20 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
         const likertQuestions = result.questions.filter((q: any) => q.type === 'likert');
 
-        likertQuestions.forEach((q: any) => {
+        likertQuestions.forEach((q: any, i: number) => {
+          const currentOrder = i + 1;
           if (q.minLabel) {
              if (currentAxis && currentAxis.name !== q.minLabel) {
                 // close previous axis
                 (currentAxis as Partial<Axis>).end = lastOrder;
                 formAxes.push(currentAxis as Axis);
                 // start new axis
-                currentAxis = { name: q.minLabel, start: q.order };
+                currentAxis = { name: q.minLabel, start: currentOrder };
              } else if (!currentAxis) {
-                currentAxis = { name: q.minLabel, start: q.order };
+                currentAxis = { name: q.minLabel, start: currentOrder };
              }
           }
-          lastOrder = q.order;
+          lastOrder = currentOrder;
         });
 
         if (currentAxis) {
