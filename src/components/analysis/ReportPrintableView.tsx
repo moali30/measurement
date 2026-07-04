@@ -62,14 +62,11 @@ const Footer = ({ signatures = [] }: { signatures: {name: string, url: string}[]
 export default function ReportPrintableView({ data }: ReportPrintableViewProps) {
   if (!data.results || data.results.length === 0) return null;
 
-  const chunk1Size = Math.ceil(data.results.length / 3);
-  const chunk2Size = Math.ceil((data.results.length - chunk1Size) / 2);
-  
-  const paddedChunks = [
-    data.results.slice(0, chunk1Size),
-    data.results.slice(chunk1Size, chunk1Size + chunk2Size),
-    data.results.slice(chunk1Size + chunk2Size)
-  ];
+  const ITEMS_PER_PAGE = 20;
+  const paddedChunks = [];
+  for (let i = 0; i < data.results.length; i += ITEMS_PER_PAGE) {
+    paddedChunks.push(data.results.slice(i, i + ITEMS_PER_PAGE));
+  }
 
   const cleanHtml = (html: string) => {
     return html
@@ -161,7 +158,7 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
             <div style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>لا توجد بيانات إضافية في هذا الجزء</div>
           )}
 
-          {index === 2 && (
+          {index === paddedChunks.length - 1 && (
             <div style={{ fontWeight: 'bold', marginTop: '20px', backgroundColor: '#e8eaf6', padding: '15px', borderRadius: '8px', border: '2px solid #1a237e', display: 'flex', justifyContent: 'space-between', fontSize: '18px' }}>
                <span>المتوسط العام للاستبيان:</span>
                <span style={{ color: '#1a237e', fontSize: '20px' }}>{data.overallAverage}%</span>
