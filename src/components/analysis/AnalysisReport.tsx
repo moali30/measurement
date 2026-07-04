@@ -104,7 +104,11 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={top10}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
+                <XAxis 
+                  dataKey="name" 
+                  interval={0}
+                  tick={{ fontSize: 12 }}
+                />
                 <YAxis domain={[0, 100]} />
                 <RechartsTooltip />
                 <Bar dataKey="weight" fill="#3b82f6" name="الوزن النسبي (%)" />
@@ -137,7 +141,14 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={axesChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
+                  <XAxis 
+                    dataKey="name" 
+                    interval={0} 
+                    angle={-45} 
+                    textAnchor="end"
+                    height={100}
+                    tick={{ fontSize: 12 }}
+                  />
                   <YAxis domain={[0, 100]} />
                   <RechartsTooltip />
                   <Bar dataKey="average" fill="#10b981" name="متوسط الوزن النسبي (%)" />
