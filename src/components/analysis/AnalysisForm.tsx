@@ -65,25 +65,27 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         // Map axes based on question minLabel
         const formAxes: Axis[] = [];
         let currentAxis: Partial<Axis> | null = null;
-        let questionNumber = 1;
+        let lastOrder = 0;
 
-        result.questions.forEach((q: any) => {
+        const likertQuestions = result.questions.filter((q: any) => q.type === 'likert');
+
+        likertQuestions.forEach((q: any) => {
           if (q.minLabel) {
              if (currentAxis && currentAxis.name !== q.minLabel) {
                 // close previous axis
-                (currentAxis as Partial<Axis>).end = questionNumber - 1;
+                (currentAxis as Partial<Axis>).end = lastOrder;
                 formAxes.push(currentAxis as Axis);
                 // start new axis
-                currentAxis = { name: q.minLabel, start: questionNumber };
+                currentAxis = { name: q.minLabel, start: q.order };
              } else if (!currentAxis) {
-                currentAxis = { name: q.minLabel, start: questionNumber };
+                currentAxis = { name: q.minLabel, start: q.order };
              }
           }
-          questionNumber++;
+          lastOrder = q.order;
         });
 
         if (currentAxis) {
-          (currentAxis as Partial<Axis>).end = questionNumber - 1;
+          (currentAxis as Partial<Axis>).end = lastOrder;
           formAxes.push(currentAxis as Axis);
         }
 
@@ -164,12 +166,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         answersByResponse.get(ans.responseId)!.push(ans);
       });
       
-      // We only care about questions that might have numeric answers or text we can parse
+      // We only care about likert questions for the analysis
+      const likertQuestions = questions.filter((q: any) => q.type === 'likert');
       responses.forEach((resp: any) => {
         const row: Record<string, any> = {};
         const respAnswers = answersByResponse.get(resp.$id) || [];
         
-        questions.forEach((q: any) => {
+        likertQuestions.forEach((q: any) => {
           const ans = respAnswers.find((a: any) => a.questionId === q.$id);
           // format question text with number if possible, or just use text
           const key = `${q.order}. ${q.text}`;
