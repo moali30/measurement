@@ -2,6 +2,9 @@
 
 import React from 'react';
 import { ReportData, QuestionResult } from '@/types/analysis';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+const COLORS = ['#4caf50', '#ffc107', '#f44336'];
 
 interface ReportPrintableViewProps {
   data: ReportData;
@@ -78,8 +81,22 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
       .replace(/rounded-[a-z0-9-\/]+/g, '');
   };
 
-  const topQuestions = [...data.results].sort((a,b) => b.relativeWeight - a.relativeWeight).slice(0, 5);
-  const bottomQuestions = [...data.results].sort((a,b) => a.relativeWeight - b.relativeWeight).slice(0, 5);
+  const top10Data = data.resultsForAnalysis.slice(0, 10).map(item => ({
+    name: `س ${item.questionNumber}`,
+    weight: item.relativeWeight
+  }));
+
+  const dist = {
+    high: data.results.filter(item => item.relativeWeight >= 80).length,
+    medium: data.results.filter(item => item.relativeWeight >= 60 && item.relativeWeight < 80).length,
+    low: data.results.filter(item => item.relativeWeight < 60).length,
+  };
+
+  const pieData = [
+    { name: 'مرتفع (>=80%)', value: dist.high },
+    { name: 'متوسط (60-80%)', value: dist.medium },
+    { name: 'منخفض (<60%)', value: dist.low },
+  ];
   
   let bestAxis: any = null;
   let worstAxis: any = null;
@@ -191,18 +208,22 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
         <Header title={data.title} subtitle="مقارنة بين المحاور" logos={data.logos} />
         
         {data.axes && data.axes.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', justifyContent: 'center', margin: '40px 0' }}>
-            {data.axes.map((axis, i) => (
-              <div key={i} style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{axis.name}</span>
-                    <span style={{ fontWeight: 'bold', color: '#1a237e', fontSize: '16px' }}>{axis.average}%</span>
-                </div>
-                <div style={{ width: '100%', height: '24px', backgroundColor: '#e0e0e0', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ width: `${axis.average}%`, height: '100%', backgroundColor: '#1a237e' }}></div>
-                </div>
-              </div>
-            ))}
+          <div style={{ marginTop: '40px', height: '400px' }} dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.axes.map(a => ({ name: a.name, average: a.average || 0 }))}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  interval={0} 
+                  angle={-45} 
+                  textAnchor="end"
+                  height={100}
+                  tick={{ fontSize: 12, fill: '#1a237e' }}
+                />
+                <YAxis domain={[0, 100]} />
+                <Bar dataKey="average" fill="#10b981" name="متوسط الوزن النسبي (%)" isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         ) : (
            <div style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>لا توجد محاور لعرض المقارنة</div>
@@ -215,38 +236,36 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
       <div className="report-page bg-white mt-8" style={PAGE_STYLE}>
         <Header title={data.title} subtitle="الرسوم البيانية والمؤشرات" logos={data.logos} />
         
-        <div style={{ marginTop: '20px', padding: '20px', border: '1px solid #1a237e' }}>
-          <h3 style={{ color: '#1a237e', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-             أعلى 5 أسئلة تقييماً
-          </h3>
-          {topQuestions.map((q, i) => (
-            <div key={`top-${i}`} style={{ marginBottom: '15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '13px' }}>
-                  <span style={{ width: '85%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.question}</span>
-                  <span style={{ fontWeight: 'bold', color: '#1a237e' }}>{q.relativeWeight}%</span>
-              </div>
-              <div style={{ width: '100%', height: '12px', backgroundColor: '#e0e0e0', borderRadius: '6px', overflow: 'hidden' }}>
-                  <div style={{ width: `${q.relativeWeight}%`, height: '100%', backgroundColor: '#1a237e' }}></div>
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', marginTop: '30px' }}>
+          <div>
+            <h3 style={{ color: '#1a237e', marginBottom: '20px', textAlign: 'center' }}>أعلى 10 أسئلة حسب الوزن النسبي</h3>
+            <div style={{ height: '300px' }} dir="ltr">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={top10Data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" interval={0} tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, 100]} />
+                  <Bar dataKey="weight" fill="#3b82f6" name="الوزن النسبي (%)" isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          ))}
-        </div>
+          </div>
 
-        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #1a237e' }}>
-          <h3 style={{ color: '#1a237e', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-             أقل 5 أسئلة تقييماً (تحتاج لتحسين)
-          </h3>
-          {bottomQuestions.map((q, i) => (
-            <div key={`bottom-${i}`} style={{ marginBottom: '15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '13px' }}>
-                  <span style={{ width: '85%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.question}</span>
-                  <span style={{ fontWeight: 'bold', color: '#1a237e' }}>{q.relativeWeight}%</span>
-              </div>
-              <div style={{ width: '100%', height: '12px', backgroundColor: '#e0e0e0', borderRadius: '6px', overflow: 'hidden' }}>
-                  <div style={{ width: `${q.relativeWeight}%`, height: '100%', backgroundColor: '#1a237e' }}></div>
-              </div>
+          <div>
+            <h3 style={{ color: '#1a237e', marginBottom: '20px', textAlign: 'center' }}>توزيع الأوزان النسبية للأسئلة</h3>
+            <div style={{ height: '300px' }} dir="ltr">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" isAnimationActive={false}>
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-          ))}
+          </div>
         </div>
 
         <Footer signatures={data.signatures} />
