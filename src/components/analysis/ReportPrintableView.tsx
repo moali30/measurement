@@ -208,22 +208,20 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
         <Header title={data.title} subtitle="مقارنة بين المحاور" logos={data.logos} />
         
         {data.axes && data.axes.length > 0 ? (
-          <div style={{ marginTop: '40px', height: '400px' }} dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.axes.map(a => ({ name: a.name, average: a.average || 0 }))}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="name" 
-                  interval={0} 
-                  angle={-45} 
-                  textAnchor="end"
-                  height={100}
-                  tick={{ fontSize: 12, fill: '#1a237e' }}
-                />
-                <YAxis domain={[0, 100]} />
-                <Bar dataKey="average" fill="#10b981" name="متوسط الوزن النسبي (%)" isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ marginTop: '40px', height: '400px', display: 'flex', justifyContent: 'center' }} dir="ltr">
+            <BarChart width={650} height={400} data={data.axes.map(a => ({ name: a.name, average: a.average || 0 }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="name" 
+                interval={0} 
+                angle={-45} 
+                textAnchor="end"
+                height={100}
+                tick={{ fontSize: 12, fill: '#1a237e' }}
+              />
+              <YAxis domain={[0, 100]} />
+              <Bar dataKey="average" fill="#10b981" name="متوسط الوزن النسبي (%)" isAnimationActive={false} />
+            </BarChart>
           </div>
         ) : (
            <div style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>لا توجد محاور لعرض المقارنة</div>
@@ -239,31 +237,27 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', marginTop: '30px' }}>
           <div>
             <h3 style={{ color: '#1a237e', marginBottom: '20px', textAlign: 'center' }}>أعلى 10 أسئلة حسب الوزن النسبي</h3>
-            <div style={{ height: '300px' }} dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={top10Data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" interval={0} tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} />
-                  <Bar dataKey="weight" fill="#3b82f6" name="الوزن النسبي (%)" isAnimationActive={false} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }} dir="ltr">
+              <BarChart width={650} height={300} data={top10Data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" interval={0} tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} />
+                <Bar dataKey="weight" fill="#3b82f6" name="الوزن النسبي (%)" isAnimationActive={false} />
+              </BarChart>
             </div>
           </div>
 
           <div>
             <h3 style={{ color: '#1a237e', marginBottom: '20px', textAlign: 'center' }}>توزيع الأوزان النسبية للأسئلة</h3>
-            <div style={{ height: '300px' }} dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" isAnimationActive={false}>
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+            <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }} dir="ltr">
+              <PieChart width={650} height={300}>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" isAnimationActive={false}>
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Legend />
+              </PieChart>
             </div>
           </div>
         </div>
