@@ -115,7 +115,7 @@ export default function AnalysisPage() {
           </div>
           
           {/* Print container (positioned off-screen for html2canvas, visible in print) */}
-          <div className="absolute left-[-15000px] top-0 print:static print:left-auto">
+          <div className="fixed left-[-15000px] top-0 print:static print:left-auto">
             <div ref={printRef}>
               <ReportPrintableView data={reportData} />
             </div>
