@@ -25,10 +25,10 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
   };
 
   const pieData = [
-    { name: 'مرتفع (>=80%)', value: dist.high },
-    { name: 'متوسط (60-80%)', value: dist.medium },
-    { name: 'منخفض (<60%)', value: dist.low },
-  ];
+    { name: 'مرتفع (>=80%)', value: dist.high, fill: '#4caf50' },
+    { name: 'متوسط (60-80%)', value: dist.medium, fill: '#ffc107' },
+    { name: 'منخفض (<60%)', value: dist.low, fill: '#f44336' },
+  ].filter(item => item.value > 0);
 
   const axesChartData = data.axes.map(axis => ({
     name: axis.name,
@@ -124,7 +124,7 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                   {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Pie>
                 <RechartsTooltip />
