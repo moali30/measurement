@@ -15,7 +15,7 @@ interface AnalysisFormProps {
 
 export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProps) {
   const [dataSource, setDataSource] = useState<'db' | 'file'>('db');
-  const [formsList, setFormsList] = useState<Record<string, unknown>[]>([]);
+  const [formsList, setFormsList] = useState<{ $id: string; title: string; responsesCount: number; [key: string]: unknown }[]>([]);
   const [selectedFormId, setSelectedFormId] = useState('');
   const [isFetchingForms, setIsFetchingForms] = useState(true);
 
@@ -28,7 +28,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [axes, setAxes] = useState<Axis[]>([{ name: '', start: 1, end: 1 }]);
   
   const [logos, setLogos] = useState({ quality: '', university: '', college: '' });
-  const [signaturesList, setSignaturesList] = useState<Record<string, unknown>[]>([]);
+  const [signaturesList, setSignaturesList] = useState<{ id: string; name: string; image_url: string; [key: string]: unknown }[]>([]);
   const [selectedSignatures, setSelectedSignatures] = useState<{name: string, url: string}[]>([]);
 
   // Filtering & processing state
@@ -165,7 +165,9 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         if (result.form.createdAt) {
            try {
              setSurveyDate(new Date(result.form.createdAt).toISOString().split('T')[0]);
-           } catch(e) {}
+           } catch {
+             // Ignore invalid date strings
+           }
         }
       }
     }
