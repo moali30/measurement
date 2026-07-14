@@ -6,7 +6,7 @@ import AnalysisReport from '@/components/analysis/AnalysisReport';
 import ReportPrintableView from '@/components/analysis/ReportPrintableView';
 import { processData } from '@/lib/analysis-utils';
 import { ReportData } from '@/types/analysis';
-import { Printer, Download, Save } from 'lucide-react';
+import { Printer, Download } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ export default function AnalysisPage() {
   
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerate = (formData: Partial<ReportData>, rawData: any[], questionTypes?: Record<string, string>) => {
+  const handleGenerate = (formData: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>) => {
     setIsGenerating(true);
     // Simulate slight delay for UX
     setTimeout(() => {
@@ -30,10 +30,6 @@ export default function AnalysisPage() {
       } as ReportData);
       setIsGenerating(false);
     }, 500);
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const handleExportPDF = async () => {
@@ -60,35 +56,6 @@ export default function AnalysisPage() {
     } finally {
       setIsExporting(false);
     }
-  };
-
-  const handleExportPNG = async () => {
-     if (!printRef.current || !reportData) return;
-     setIsExporting(true);
-     try {
-       const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
-       const link = document.createElement('a');
-       link.download = `${reportData.title || 'report'}.png`;
-       link.href = canvas.toDataURL('image/png');
-       link.click();
-     } catch (err) {
-        console.error(err);
-        toast.error('حدث خطأ أثناء تصدير الـ PNG');
-     } finally {
-        setIsExporting(false);
-     }
-  };
-
-  const handleSaveConfig = () => {
-    if (!reportData) return;
-    const dataStr = JSON.stringify(reportData, null, 2);
-    const blob = new Blob([dataStr], {type: "application/json"});
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = `${reportData.title || 'settings'}.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   return (

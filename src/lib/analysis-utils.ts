@@ -1,6 +1,6 @@
 import { Axis, QuestionResult, ReportData } from '../types/analysis';
 
-export function processData(data: Record<string, any>[], currentAxes: Axis[], questionTypes?: Record<string, string>): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
+export function processData(data: Record<string, unknown>[], currentAxes: Axis[], questionTypes?: Record<string, string>): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
   if (!data || data.length === 0) {
     return {
       results: [],
@@ -28,7 +28,7 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[], qu
     const textAnswers: string[] = [];
 
     data.forEach(row => {
-      let val = row[question];
+      const val = row[question];
       if (val === undefined || val === null || val === '') return;
       if (typeof val === 'string') {
         const cleanVal = val.trim();

@@ -9,13 +9,13 @@ import { listSignaturesServer } from '@/app/actions/signatures';
 import { toast } from 'sonner';
 
 interface AnalysisFormProps {
-  onGenerate: (data: Partial<ReportData>, rawData: Record<string, any>[], questionTypes?: Record<string, string>) => void;
+  onGenerate: (data: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>) => void;
   isLoading: boolean;
 }
 
 export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProps) {
   const [dataSource, setDataSource] = useState<'db' | 'file'>('db');
-  const [formsList, setFormsList] = useState<any[]>([]);
+  const [formsList, setFormsList] = useState<Record<string, unknown>[]>([]);
   const [selectedFormId, setSelectedFormId] = useState('');
   const [isFetchingForms, setIsFetchingForms] = useState(true);
 
@@ -28,11 +28,11 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [axes, setAxes] = useState<Axis[]>([{ name: '', start: 1, end: 1 }]);
   
   const [logos, setLogos] = useState({ quality: '', university: '', college: '' });
-  const [signaturesList, setSignaturesList] = useState<any[]>([]);
+  const [signaturesList, setSignaturesList] = useState<Record<string, unknown>[]>([]);
   const [selectedSignatures, setSelectedSignatures] = useState<{name: string, url: string}[]>([]);
 
   // Filtering & processing state
-  const [loadedRawData, setLoadedRawData] = useState<Record<string, any>[]>([]);
+  const [loadedRawData, setLoadedRawData] = useState<Record<string, unknown>[]>([]);
   const [questionTypes, setQuestionTypes] = useState<Record<string, string>>({});
   const [availableFilters, setAvailableFilters] = useState<{column: string, values: string[]}[]>([]);
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
@@ -74,9 +74,9 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         let currentAxis: Partial<Axis> | null = null;
         let lastOrder = 0;
 
-        const likertQuestions = result.questions.filter((q: any) => q.type === 'likert');
+        const likertQuestions = result.questions.filter((q: Record<string, unknown>) => q.type === 'likert');
 
-        likertQuestions.forEach((q: any, i: number) => {
+        likertQuestions.forEach((q: Record<string, unknown>, i: number) => {
           const currentOrder = i + 1;
           if (q.minLabel) {
              if (currentAxis && currentAxis.name !== q.minLabel) {
@@ -84,9 +84,9 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                 (currentAxis as Partial<Axis>).end = lastOrder;
                 formAxes.push(currentAxis as Axis);
                 // start new axis
-                currentAxis = { name: q.minLabel, start: currentOrder };
+                currentAxis = { name: q.minLabel as string, start: currentOrder };
              } else if (!currentAxis) {
-                currentAxis = { name: q.minLabel, start: currentOrder };
+                currentAxis = { name: q.minLabel as string, start: currentOrder };
              }
           }
           lastOrder = currentOrder;
@@ -102,47 +102,48 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         }
 
         // --- Process Raw Data and Filters immediately ---
-        const rawData: Record<string, any>[] = [];
+        const rawData: Record<string, unknown>[] = [];
         const qTypes: Record<string, string> = {};
         const filterableCols: {column: string, values: string[]}[] = [];
         
         const { responses, answers } = result;
         
-        const answersByResponse = new Map<string, any[]>();
-        answers.forEach((ans: any) => {
-          if (!answersByResponse.has(ans.responseId)) {
-            answersByResponse.set(ans.responseId, []);
+        const answersByResponse = new Map<string, Record<string, unknown>[]>();
+        answers.forEach((ans: Record<string, unknown>) => {
+          const respId = ans.responseId as string;
+          if (!answersByResponse.has(respId)) {
+            answersByResponse.set(respId, []);
           }
-          answersByResponse.get(ans.responseId)!.push(ans);
+          answersByResponse.get(respId)!.push(ans);
         });
         
-        const analysisQuestions = result.questions.filter((q: any) => 
-          ['likert', 'text', 'textarea', 'rating', 'number', 'radio', 'select', 'dropdown', 'checkbox'].includes(q.type)
+        const analysisQuestions = result.questions.filter((q: Record<string, unknown>) => 
+          ['likert', 'text', 'textarea', 'rating', 'number', 'radio', 'select', 'dropdown', 'checkbox'].includes(q.type as string)
         );
         
-        analysisQuestions.forEach((q: any) => {
+        analysisQuestions.forEach((q: Record<string, unknown>) => {
             const key = `${q.order}. ${q.text}`;
-            qTypes[key] = q.type;
-            if (['radio', 'select', 'dropdown'].includes(q.type)) {
+            qTypes[key] = q.type as string;
+            if (['radio', 'select', 'dropdown'].includes(q.type as string)) {
                 filterableCols.push({ column: key, values: [] });
             }
         });
         
-        responses.forEach((resp: any) => {
-          const row: Record<string, any> = {};
-          const respAnswers = answersByResponse.get(resp.$id) || [];
+        responses.forEach((resp: Record<string, unknown>) => {
+          const row: Record<string, unknown> = {};
+          const respAnswers = answersByResponse.get(resp.$id as string) || [];
           
-          analysisQuestions.forEach((q: any) => {
-            const ans = respAnswers.find((a: any) => a.questionId === q.$id);
+          analysisQuestions.forEach((q: Record<string, unknown>) => {
+            const ans = respAnswers.find((a: Record<string, unknown>) => a.questionId === q.$id);
             const key = `${q.order}. ${q.text}`;
             if (ans) {
                row[key] = ans.numberValue !== null && ans.numberValue !== undefined ? ans.numberValue : ans.textValue;
                
                // Collect unique values for filterable columns
-               if (['radio', 'select', 'dropdown'].includes(q.type) && row[key]) {
+               if (['radio', 'select', 'dropdown'].includes(q.type as string) && row[key]) {
                    const fCol = filterableCols.find(f => f.column === key);
-                   if (fCol && !fCol.values.includes(row[key])) {
-                       fCol.values.push(row[key]);
+                   if (fCol && !fCol.values.includes(row[key] as string)) {
+                       fCol.values.push(row[key] as string);
                    }
                }
             } else {
@@ -169,7 +170,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       }
     }
     fetchFormDetails();
-  }, [selectedFormId]);
+  }, [selectedFormId, title]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -179,7 +180,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       const reader = new FileReader();
       reader.onload = (event) => {
          try {
-             let rawData: any[] = [];
+             let rawData: Record<string, unknown>[] = [];
              const extension = selectedFile.name.split('.').pop()?.toLowerCase();
              if (extension === 'json') {
                rawData = JSON.parse(event.target?.result as string);
@@ -468,7 +469,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
             <div key={item.id} className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">{item.label}</label>
               <div className="relative border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:border-indigo-400 transition-colors bg-indigo-50/50 dark:bg-indigo-900/20 text-center">
-                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(item.id as any, e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(item.id as 'quality' | 'university' | 'college' | 'signature', e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
                   {item.value ? 'تم الرفع ✓' : 'رفع الصورة'}
                 </span>
