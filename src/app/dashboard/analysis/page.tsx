@@ -19,11 +19,11 @@ export default function AnalysisPage() {
   
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerate = (formData: Partial<ReportData>, rawData: any[]) => {
+  const handleGenerate = (formData: Partial<ReportData>, rawData: any[], questionTypes?: Record<string, string>) => {
     setIsGenerating(true);
     // Simulate slight delay for UX
     setTimeout(() => {
-      const processed = processData(rawData, formData.axes || []);
+      const processed = processData(rawData, formData.axes || [], questionTypes);
       setReportData({
         ...formData,
         ...processed

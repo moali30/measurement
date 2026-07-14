@@ -1,6 +1,6 @@
 import { Axis, QuestionResult, ReportData } from '../types/analysis';
 
-export function processData(data: Record<string, any>[], currentAxes: Axis[]): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
+export function processData(data: Record<string, any>[], currentAxes: Axis[], questionTypes?: Record<string, string>): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
   if (!data || data.length === 0) {
     return {
       results: [],
@@ -17,6 +17,13 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[]): P
   const comments: {question: string, answers: string[]}[] = [];
 
   questions.forEach((question, index) => {
+    const qType = questionTypes ? questionTypes[question] : undefined;
+    
+    // Skip completely if we know it's a structural or filtering question (radio, select, etc)
+    if (qType && ['radio', 'select', 'dropdown', 'checkbox'].includes(qType)) {
+       return;
+    }
+
     const answers: number[] = [];
     const textAnswers: string[] = [];
 
@@ -47,7 +54,10 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[]): P
           "لا": 1
         };
         
-        if (likertMap[cleanVal]) {
+        // If it's explicitly a text/textarea question, force it to comments
+        if (qType === 'text' || qType === 'textarea') {
+           textAnswers.push(cleanVal);
+        } else if (likertMap[cleanVal]) {
            answers.push(likertMap[cleanVal]);
         } else {
            const num = parseFloat(cleanVal);
@@ -58,7 +68,11 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[]): P
            }
         }
       } else if (typeof val === 'number') {
-        answers.push(val);
+        if (qType === 'text' || qType === 'textarea') {
+           textAnswers.push(val.toString());
+        } else {
+           answers.push(val);
+        }
       }
     });
 

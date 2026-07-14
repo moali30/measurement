@@ -9,7 +9,7 @@ import { listSignaturesServer } from '@/app/actions/signatures';
 import { toast } from 'sonner';
 
 interface AnalysisFormProps {
-  onGenerate: (data: Partial<ReportData>, rawData: Record<string, any>[]) => void;
+  onGenerate: (data: Partial<ReportData>, rawData: Record<string, any>[], questionTypes?: Record<string, string>) => void;
   isLoading: boolean;
 }
 
@@ -29,6 +29,12 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [logos, setLogos] = useState({ quality: '', university: '', college: '' });
   const [signaturesList, setSignaturesList] = useState<any[]>([]);
   const [selectedSignatures, setSelectedSignatures] = useState<{name: string, url: string}[]>([]);
+
+  // Filtering & processing state
+  const [loadedRawData, setLoadedRawData] = useState<Record<string, any>[]>([]);
+  const [questionTypes, setQuestionTypes] = useState<Record<string, string>>({});
+  const [availableFilters, setAvailableFilters] = useState<{column: string, values: string[]}[]>([]);
+  const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     async function loadForms() {
@@ -93,6 +99,63 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         if (formAxes.length > 0) {
           setAxes(formAxes);
         }
+
+        // --- Process Raw Data and Filters immediately ---
+        const rawData: Record<string, any>[] = [];
+        const qTypes: Record<string, string> = {};
+        const filterableCols: {column: string, values: string[]}[] = [];
+        
+        const { responses, answers } = result;
+        
+        const answersByResponse = new Map<string, any[]>();
+        answers.forEach((ans: any) => {
+          if (!answersByResponse.has(ans.responseId)) {
+            answersByResponse.set(ans.responseId, []);
+          }
+          answersByResponse.get(ans.responseId)!.push(ans);
+        });
+        
+        const analysisQuestions = result.questions.filter((q: any) => 
+          ['likert', 'text', 'textarea', 'rating', 'number', 'radio', 'select', 'dropdown', 'checkbox'].includes(q.type)
+        );
+        
+        analysisQuestions.forEach((q: any) => {
+            const key = `${q.order}. ${q.text}`;
+            qTypes[key] = q.type;
+            if (['radio', 'select', 'dropdown'].includes(q.type)) {
+                filterableCols.push({ column: key, values: [] });
+            }
+        });
+        
+        responses.forEach((resp: any) => {
+          const row: Record<string, any> = {};
+          const respAnswers = answersByResponse.get(resp.$id) || [];
+          
+          analysisQuestions.forEach((q: any) => {
+            const ans = respAnswers.find((a: any) => a.questionId === q.$id);
+            const key = `${q.order}. ${q.text}`;
+            if (ans) {
+               row[key] = ans.numberValue !== null && ans.numberValue !== undefined ? ans.numberValue : ans.textValue;
+               
+               // Collect unique values for filterable columns
+               if (['radio', 'select', 'dropdown'].includes(q.type) && row[key]) {
+                   const fCol = filterableCols.find(f => f.column === key);
+                   if (fCol && !fCol.values.includes(row[key])) {
+                       fCol.values.push(row[key]);
+                   }
+               }
+            } else {
+               row[key] = null;
+            }
+          });
+          rawData.push(row);
+        });
+        
+        setLoadedRawData(rawData);
+        setQuestionTypes(qTypes);
+        setAvailableFilters(filterableCols.filter(f => f.values.length > 0));
+        setActiveFilters({});
+        if (!title && result.form.title) setTitle(result.form.title);
       }
     }
     fetchFormDetails();
@@ -100,7 +163,58 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+         try {
+             let rawData: any[] = [];
+             const extension = selectedFile.name.split('.').pop()?.toLowerCase();
+             if (extension === 'json') {
+               rawData = JSON.parse(event.target?.result as string);
+             } else if (['xlsx', 'xls', 'csv'].includes(extension || '')) {
+               const workbook = XLSX.read(event.target?.result, { type: 'binary' });
+               const firstSheet = workbook.SheetNames[0];
+               rawData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+             }
+             
+             if (rawData.length > 0) {
+                const keys = Object.keys(rawData[0]);
+                const filterableCols: {column: string, values: string[]}[] = [];
+                
+                keys.forEach(key => {
+                   const uniqueValues = new Set<string>();
+                   let isNumeric = false;
+                   for(const row of rawData) {
+                      if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+                          const valStr = String(row[key]).trim();
+                          if (!isNaN(parseFloat(valStr)) && !["موافق", "محايد", "نعم", "لا"].some(v => valStr.includes(v))) {
+                              isNumeric = true;
+                          }
+                          uniqueValues.add(valStr);
+                      }
+                   }
+                   if (!isNumeric && uniqueValues.size > 0 && uniqueValues.size <= 10) {
+                       filterableCols.push({ column: key, values: Array.from(uniqueValues) });
+                   }
+                });
+                
+                setLoadedRawData(rawData);
+                setQuestionTypes({});
+                setAvailableFilters(filterableCols);
+                setActiveFilters({});
+             }
+         } catch(err) {
+            console.error('Error parsing file for preview', err);
+         }
+      };
+      
+      if (selectedFile.name.endsWith('.json') || selectedFile.type === 'application/json') {
+        reader.readAsText(selectedFile);
+      } else {
+        reader.readAsBinaryString(selectedFile);
+      }
     }
   };
 
@@ -143,92 +257,32 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
     };
 
     if (dataSource === 'db') {
-      if (!selectedFormId) {
+      if (!selectedFormId || loadedRawData.length === 0) {
         toast.warning('يرجى اختيار استبيان من القائمة أولاً');
         return;
       }
-      
-      const result = await loadFormDetailServer(selectedFormId);
-      if (!result.success || !result.form) {
-        toast.error('حدث خطأ أثناء تحميل بيانات الاستبيان: ' + result.error);
-        return;
-      }
-
-      // Map DB responses to rawData array
-      const rawData: Record<string, any>[] = [];
-      const { questions, responses, answers } = result;
-
-      // Optimize answer lookup by grouping them by responseId
-      const answersByResponse = new Map<string, any[]>();
-      answers.forEach((ans: any) => {
-        if (!answersByResponse.has(ans.responseId)) {
-          answersByResponse.set(ans.responseId, []);
-        }
-        answersByResponse.get(ans.responseId)!.push(ans);
-      });
-      
-      // We care about likert and text questions for the analysis
-      const analysisQuestions = questions.filter((q: any) => 
-        q.type === 'likert' || q.type === 'text' || q.type === 'textarea' || q.type === 'rating' || q.type === 'number'
-      );
-      responses.forEach((resp: any) => {
-        const row: Record<string, any> = {};
-        const respAnswers = answersByResponse.get(resp.$id) || [];
-        
-        analysisQuestions.forEach((q: any) => {
-          const ans = respAnswers.find((a: any) => a.questionId === q.$id);
-          // format question text with number if possible, or just use text
-          const key = `${q.order}. ${q.text}`;
-          if (ans) {
-             row[key] = ans.numberValue !== null && ans.numberValue !== undefined ? ans.numberValue : ans.textValue;
-          } else {
-             row[key] = 0;
-          }
-        });
-        rawData.push(row);
-      });
-
-      // Update basic fields if not already typed by user
-      if (!title && result.form.title) setTitle(result.form.title);
-      
-      onGenerate(baseData, rawData);
     } else {
-      if (!file) {
+      if (!file || loadedRawData.length === 0) {
         toast.warning('يرجى رفع ملف البيانات أولاً');
         return;
       }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          let rawData: any[] = [];
-          const extension = file.name.split('.').pop()?.toLowerCase();
-          
-          if (extension === 'json') {
-            rawData = JSON.parse(e.target?.result as string);
-          } else if (['xlsx', 'xls', 'csv'].includes(extension || '')) {
-            const workbook = XLSX.read(e.target?.result, { type: 'binary' });
-            const firstSheet = workbook.SheetNames[0];
-            rawData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
-          } else {
-            toast.error('صيغة الملف غير مدعومة. يرجى استخدام Excel أو CSV أو JSON');
-            return;
-          }
-
-          onGenerate(baseData, rawData);
-
-        } catch (error) {
-          console.error('Error processing file:', error);
-          toast.error('حدث خطأ في معالجة الملف');
-        }
-      };
-
-      if (file.name.endsWith('.json') || file.type === 'application/json') {
-        reader.readAsText(file);
-      } else {
-        reader.readAsBinaryString(file);
-      }
     }
+    
+    // Apply Filters
+    let finalData = [...loadedRawData];
+    Object.keys(activeFilters).forEach(col => {
+       const selectedVals = activeFilters[col];
+       if (selectedVals.length > 0) {
+           finalData = finalData.filter(row => selectedVals.includes(String(row[col])));
+       }
+    });
+
+    if (finalData.length === 0) {
+       toast.error('لا توجد بيانات متاحة بعد تطبيق الفلاتر المحددة.');
+       return;
+    }
+
+    onGenerate(baseData, finalData, questionTypes);
   };
 
   return (
@@ -311,13 +365,58 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
           </div>
         </div>
 
-        <div className="mt-6 space-y-2">
-          <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300">
-            <Edit3 className="mr-2 h-4 w-4 text-indigo-500" /> ملاحظات إضافية (يدوي)
-          </label>
-          <textarea rows={4} value={manualComment} onChange={e => setManualComment(e.target.value)} placeholder="أدخل أي ملاحظات إضافية هنا" className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          <div className="mt-6 space-y-2">
+            <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300">
+              <Edit3 className="mr-2 h-4 w-4 text-indigo-500" /> ملاحظات إضافية (يدوي)
+            </label>
+            <textarea rows={4} value={manualComment} onChange={e => setManualComment(e.target.value)} placeholder="أدخل أي ملاحظات إضافية هنا" className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
         </div>
-      </div>
+
+        {/* Filters Section */}
+        {availableFilters.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800 dark:text-indigo-400">
+               تصفية البيانات (الفلاتر)
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+               يمكنك تحديد الفئات التي ترغب في تضمينها في التحليل. إذا لم تحدد أي خيار، سيتم تجاهل الفلتر وإدراج الجميع.
+            </p>
+            <div className="space-y-6">
+               {availableFilters.map((filter, idx) => (
+                  <div key={idx} className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                     <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-3">{filter.column}</h3>
+                     <div className="flex flex-wrap gap-4">
+                        {filter.values.map((val, vIdx) => {
+                           const isChecked = activeFilters[filter.column]?.includes(val) || false;
+                           return (
+                              <label key={vIdx} className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-800 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 hover:border-indigo-500 transition-colors">
+                                 <input 
+                                   type="checkbox" 
+                                   className="form-checkbox text-indigo-600 rounded"
+                                   checked={isChecked}
+                                   onChange={(e) => {
+                                      const newFilters = { ...activeFilters };
+                                      if (!newFilters[filter.column]) newFilters[filter.column] = [];
+                                      
+                                      if (e.target.checked) {
+                                         newFilters[filter.column].push(val);
+                                      } else {
+                                         newFilters[filter.column] = newFilters[filter.column].filter(v => v !== val);
+                                      }
+                                      setActiveFilters(newFilters);
+                                   }}
+                                 />
+                                 <span className="text-sm text-gray-800 dark:text-gray-200">{val}</span>
+                              </label>
+                           );
+                        })}
+                     </div>
+                  </div>
+               ))}
+            </div>
+          </div>
+        )}
 
       {/* Axes */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
