@@ -32,13 +32,13 @@ interface HeaderProps {
 const Header = ({ subtitle, logos }: HeaderProps) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #1a237e' }}>
     <div style={{ width: '100px', display: 'flex', justifyContent: 'flex-end' }}>
-      {logos?.quality && <img crossOrigin="anonymous" src={logos.quality} alt="Quality" style={{ maxHeight: '60px' }} />}
+      {logos?.quality && <img src={logos.quality} alt="Quality" style={{ maxHeight: '60px' }} />}
     </div>
     <div style={{ flex: 1, textAlign: 'center' }}>
       <h3 style={{ margin: '0 0 5px 0', color: '#1a237e', fontSize: '18px' }}>{subtitle}</h3>
     </div>
     <div style={{ width: '100px', display: 'flex', justifyContent: 'flex-start' }}>
-      {logos?.college && <img crossOrigin="anonymous" src={logos.college} alt="College" style={{ maxHeight: '60px' }} />}
+      {logos?.college && <img src={logos.college} alt="College" style={{ maxHeight: '60px' }} />}
     </div>
   </div>
 );
@@ -51,7 +51,7 @@ const Footer = ({ signatures = [] }: { signatures: {name: string, url: string}[]
       {signatures.map((sig, i) => (
         <div key={i} style={{ textAlign: 'center' }}>
           <p style={{ margin: '0 0 10px 0', color: '#333' }}>{sig.name}</p>
-          <img crossOrigin="anonymous" src={sig.url} alt={sig.name} style={{ maxHeight: '60px', margin: '0 auto', display: 'block', mixBlendMode: 'multiply' }} />
+          <img src={sig.url} alt={sig.name} style={{ maxHeight: '60px', margin: '0 auto', display: 'block', mixBlendMode: 'multiply' }} />
         </div>
       ))}
       {signatures.length === 0 && (
@@ -114,9 +114,9 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
       {/* صفحة 1: الغلاف */}
       <div className="report-page bg-white" style={{ ...PAGE_STYLE, justifyContent: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '80px', marginTop: '10mm', width: '100%' }}>
-          {data.logos?.quality && <img crossOrigin="anonymous" src={data.logos.quality} alt="Quality Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
-          {data.logos?.university && <img crossOrigin="anonymous" src={data.logos.university} alt="University Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
-          {data.logos?.college && <img crossOrigin="anonymous" src={data.logos.college} alt="College Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
+          {data.logos?.quality && <img src={data.logos.quality} alt="Quality Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
+          {data.logos?.university && <img src={data.logos.university} alt="University Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
+          {data.logos?.college && <img src={data.logos.college} alt="College Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
         </div>
         
         <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>

@@ -73,9 +73,9 @@ export default function AnalysisPage() {
       
       pdf.save(`تقرير_${reportData?.title || 'تحليل_الاستبيان'}.pdf`);
       toast.success('تم تصدير التقرير بنجاح!');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error exporting PDF:', err);
-      toast.error('حدث خطأ أثناء التصدير. يرجى المحاولة مرة أخرى.');
+      toast.error(`خطأ: ${err.message || 'حدث خطأ أثناء التصدير'}`);
     } finally {
       setIsExporting(false);
     }
@@ -104,12 +104,7 @@ export default function AnalysisPage() {
             <AnalysisReport data={reportData} />
           </div>
           
-          {/* Print container (hidden safely for html2canvas) */}
-          <div className="absolute top-0 left-0 w-full opacity-0 pointer-events-none z-[-9999]">
-            <div ref={printRef}>
-              <ReportPrintableView data={reportData} />
-            </div>
-          </div>
+
 
           {/* Preview Modal */}
           {isPreviewOpen && (
@@ -129,7 +124,9 @@ export default function AnalysisPage() {
                   </div>
                   <div className="flex-1 overflow-y-auto p-8 flex justify-center custom-scrollbar">
                      <div className="transform scale-75 md:scale-90 origin-top">
-                        <ReportPrintableView data={reportData} />
+                        <div ref={printRef}>
+                          <ReportPrintableView data={reportData} />
+                        </div>
                      </div>
                   </div>
                </div>
