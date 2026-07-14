@@ -12,6 +12,7 @@ export default function AnalysisPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -29,9 +30,53 @@ export default function AnalysisPage() {
   };
 
   const handleExportPDF = async () => {
-    // Native print works much better than jsPDF (it creates real PDF text, smaller files, handles SVGs correctly)
-    // The user should select "Save as PDF" in the print dialog.
-    window.print();
+    if (!printRef.current) return;
+    setIsExporting(true);
+    
+    try {
+      // Dynamic imports to avoid SSR issues
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      
+      const pages = printRef.current.querySelectorAll('.report-page');
+      if (pages.length === 0) {
+        setIsExporting(false);
+        return;
+      }
+      
+      // Create A4 PDF (210mm x 297mm)
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      for (let i = 0; i < pages.length; i++) {
+        const pageEl = pages[i] as HTMLElement;
+        
+        // Render canvas with scale 2 for high quality
+        const canvas = await html2canvas(pageEl, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        // The element is styled to be A4 proportions, but we ensure it fits perfectly
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      }
+      
+      pdf.save(`تقرير_${reportData?.title || 'تحليل_الاستبيان'}.pdf`);
+    } catch (err) {
+      console.error('Error exporting PDF:', err);
+      // Optional: Add a toast error here
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -71,9 +116,9 @@ export default function AnalysisPage() {
                   <div className="bg-white px-6 py-4 border-b flex justify-between items-center">
                      <h3 className="font-bold text-lg text-gray-800">معاينة التقرير</h3>
                      <div className="flex gap-3">
-                        <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm text-sm">
-                           <Download className="w-4 h-4" />
-                           حفظ كـ PDF
+                        <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm text-sm disabled:opacity-50">
+                           {isExporting ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download className="w-4 h-4" />}
+                           {isExporting ? 'جاري التصدير...' : 'حفظ كـ PDF'}
                         </button>
                         <button onClick={() => setIsPreviewOpen(false)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm">
                            إغلاق
