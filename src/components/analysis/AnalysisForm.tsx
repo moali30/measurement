@@ -21,6 +21,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
+  const [surveyTitle, setSurveyTitle] = useState('');
   const [surveyDate, setSurveyDate] = useState(new Date().toISOString().split('T')[0]);
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualComment, setManualComment] = useState('');
@@ -155,7 +156,16 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         setQuestionTypes(qTypes);
         setAvailableFilters(filterableCols.filter(f => f.values.length > 0));
         setActiveFilters({});
-        if (!title && result.form.title) setTitle(result.form.title);
+        
+        if (result.form.title) {
+           setSurveyTitle(result.form.title);
+           if (!title) setTitle(result.form.title);
+        }
+        if (result.form.createdAt) {
+           try {
+             setSurveyDate(new Date(result.form.createdAt).toISOString().split('T')[0]);
+           } catch(e) {}
+        }
       }
     }
     fetchFormDetails();
@@ -247,7 +257,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
     const validAxes = axes.filter(a => a.name && a.start <= a.end);
 
     const baseData = {
-      title: title || 'تقرير تحليل الاستبيان',
+      title: title || surveyTitle || 'تقرير تحليل الاستبيان',
       surveyDate,
       reportDate,
       manualComment,
