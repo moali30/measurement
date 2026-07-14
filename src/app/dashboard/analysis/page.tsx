@@ -7,6 +7,9 @@ import ReportPrintableView from '@/components/analysis/ReportPrintableView';
 import { processData } from '@/lib/analysis-utils';
 import { ReportData } from '@/types/analysis';
 import { Printer, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 export default function AnalysisPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -34,9 +37,7 @@ export default function AnalysisPage() {
     setIsExporting(true);
     
     try {
-      // Dynamic imports to avoid SSR issues
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
+      toast.info('جاري تجهيز التقرير، يرجى الانتظار...');
       
       const pages = printRef.current.querySelectorAll('.report-page');
       if (pages.length === 0) {
@@ -71,9 +72,10 @@ export default function AnalysisPage() {
       }
       
       pdf.save(`تقرير_${reportData?.title || 'تحليل_الاستبيان'}.pdf`);
+      toast.success('تم تصدير التقرير بنجاح!');
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      // Optional: Add a toast error here
+      toast.error('حدث خطأ أثناء التصدير. يرجى المحاولة مرة أخرى.');
     } finally {
       setIsExporting(false);
     }
@@ -102,8 +104,8 @@ export default function AnalysisPage() {
             <AnalysisReport data={reportData} />
           </div>
           
-          {/* Print container (positioned off-screen for html2canvas, visible in print) */}
-          <div className="fixed left-[-15000px] top-0 print:static print:left-auto">
+          {/* Print container (hidden safely for html2canvas) */}
+          <div className="absolute top-0 left-0 w-full opacity-0 pointer-events-none z-[-9999]">
             <div ref={printRef}>
               <ReportPrintableView data={reportData} />
             </div>
