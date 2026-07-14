@@ -1,10 +1,9 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React from 'react';
-import { ReportData, QuestionResult } from '@/types/analysis';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-
-const COLORS = ['#4caf50', '#ffc107', '#f44336'];
+import { ReportData, Axis } from '@/types/analysis';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 
 interface ReportPrintableViewProps {
   data: ReportData;
@@ -24,7 +23,13 @@ const PAGE_STYLE = {
   pageBreakAfter: 'always' as const,
 };
 
-const Header = ({ title, subtitle, logos }: any) => (
+interface HeaderProps {
+  subtitle: string;
+  logos?: { quality?: string; university?: string; college?: string };
+  title?: string;
+}
+
+const Header = ({ subtitle, logos }: HeaderProps) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #1a237e' }}>
     <div style={{ width: '100px', display: 'flex', justifyContent: 'flex-end' }}>
       {logos?.quality && <img crossOrigin="anonymous" src={logos.quality} alt="Quality" style={{ maxHeight: '60px' }} />}
@@ -95,8 +100,8 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
     { name: 'منخفض (<60%)', value: dist.low, fill: '#f44336' },
   ].filter(item => item.value > 0);
   
-  let bestAxis: any = null;
-  let worstAxis: any = null;
+  let bestAxis: Axis | null = null;
+  let worstAxis: Axis | null = null;
   
   if (data.axes && data.axes.length > 0) {
      bestAxis = data.axes.reduce((a,b) => (a.average || 0) > (b.average || 0) ? a : b);
@@ -109,9 +114,9 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
       {/* صفحة 1: الغلاف */}
       <div className="report-page bg-white" style={{ ...PAGE_STYLE, justifyContent: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '80px', marginTop: '10mm', width: '100%' }}>
-          {data.logos?.quality && <img crossOrigin="anonymous" src={data.logos.quality} style={{ maxHeight: '140px', maxWidth: '30%' }} />}
-          {data.logos?.university && <img crossOrigin="anonymous" src={data.logos.university} style={{ maxHeight: '140px', maxWidth: '30%' }} />}
-          {data.logos?.college && <img crossOrigin="anonymous" src={data.logos.college} style={{ maxHeight: '140px', maxWidth: '30%' }} />}
+          {data.logos?.quality && <img crossOrigin="anonymous" src={data.logos.quality} alt="Quality Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
+          {data.logos?.university && <img crossOrigin="anonymous" src={data.logos.university} alt="University Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
+          {data.logos?.college && <img crossOrigin="anonymous" src={data.logos.college} alt="College Logo" style={{ maxHeight: '140px', maxWidth: '30%' }} />}
         </div>
         
         <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
