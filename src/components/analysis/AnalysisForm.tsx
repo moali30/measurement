@@ -286,6 +286,10 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const handleGenerate = async () => {
     const validAxes = axes.filter(a => a.name && a.start <= a.end);
 
+    const filterArray = Object.keys(activeFilters)
+        .filter(col => activeFilters[col].length > 0)
+        .map(col => ({ column: col, values: activeFilters[col] }));
+
     const baseData = {
       title: title || surveyTitle || 'تقرير تحليل الاستبيان',
       surveyDate,
@@ -293,7 +297,8 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       manualComment,
       axes: validAxes,
       logos,
-      signatures: selectedSignatures
+      signatures: selectedSignatures,
+      filters: filterArray
     };
 
     if (dataSource === 'db') {
@@ -467,27 +472,29 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                حدد الأسئلة التي ترغب في إدراجها كتعليقات في نهاية التقرير ولن تدخل في التحليل الكمي.
             </p>
-            <div className="flex flex-wrap gap-4">
-               {availableCommentCols.map((col, idx) => {
-                  const isChecked = commentQuestions.includes(col);
-                  return (
-                     <label key={idx} className="flex items-center gap-2 cursor-pointer bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 hover:border-indigo-500 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          className="form-checkbox text-indigo-600 rounded"
-                          checked={isChecked}
-                          onChange={(e) => {
-                             if (e.target.checked) {
-                                setCommentQuestions([...commentQuestions, col]);
-                             } else {
-                                setCommentQuestions(commentQuestions.filter(c => c !== col));
-                             }
-                          }}
-                        />
-                        <span className="text-sm text-gray-800 dark:text-gray-200">{col}</span>
-                     </label>
-                  );
-               })}
+            <div className="max-h-64 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50/50 dark:bg-gray-900/50">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                 {availableCommentCols.map((col, idx) => {
+                    const isChecked = commentQuestions.includes(col);
+                    return (
+                       <label key={idx} className="flex items-start gap-3 cursor-pointer bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-700 hover:border-indigo-500 transition-colors shadow-sm">
+                          <input 
+                            type="checkbox" 
+                            className="form-checkbox mt-1 text-indigo-600 rounded"
+                            checked={isChecked}
+                            onChange={(e) => {
+                               if (e.target.checked) {
+                                  setCommentQuestions([...commentQuestions, col]);
+                               } else {
+                                  setCommentQuestions(commentQuestions.filter(c => c !== col));
+                               }
+                            }}
+                          />
+                          <span className="text-sm text-gray-800 dark:text-gray-200 leading-tight">{col}</span>
+                       </label>
+                    );
+                 })}
+               </div>
             </div>
           </div>
         )}

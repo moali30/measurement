@@ -33,4 +33,5 @@ export interface ReportData {
   };
   signatures: {name: string, url: string}[];
   comments?: {question: string, answers: string[]}[];
+  filters?: {column: string, values: string[]}[];
 }

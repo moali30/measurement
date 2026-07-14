@@ -114,8 +114,21 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
           {data.logos?.college && <img crossOrigin="anonymous" src={data.logos.college} style={{ maxHeight: '140px', maxWidth: '30%' }} />}
         </div>
         
-        <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '60px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
            <h1 style={{ fontSize: '34px', color: '#1a237e', margin: '0', fontWeight: 'bold', lineHeight: '1.6' }}>{data.title}</h1>
+           
+           {data.filters && data.filters.length > 0 && (
+              <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#e8eaf6', borderRadius: '8px', display: 'inline-block', margin: '20px auto 0', textAlign: 'right' }}>
+                 <strong style={{ color: '#1a237e', display: 'block', marginBottom: '8px' }}>الفئة المستهدفة للتحليل:</strong>
+                 <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                    {data.filters.map((f, i) => (
+                       <li key={i} style={{ marginBottom: '4px', fontSize: '15px' }}>
+                          <span style={{ fontWeight: 'bold' }}>{f.column.replace(/^\d+\.\s*/, '')}:</span> {f.values.join(' ، ')}
+                       </li>
+                    ))}
+                 </ul>
+              </div>
+           )}
         </div>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', marginBottom: '10mm', fontSize: '18px', fontWeight: 'bold', width: '100%', padding: '0 20px' }}>
