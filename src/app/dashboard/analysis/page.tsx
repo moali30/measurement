@@ -7,8 +7,6 @@ import ReportPrintableView from '@/components/analysis/ReportPrintableView';
 import { processData } from '@/lib/analysis-utils';
 import { ReportData } from '@/types/analysis';
 import { Printer, Download } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
 
 export default function AnalysisPage() {
@@ -19,11 +17,11 @@ export default function AnalysisPage() {
   
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerate = (formData: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>) => {
+  const handleGenerate = (formData: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>, commentQuestions?: string[]) => {
     setIsGenerating(true);
     // Simulate slight delay for UX
     setTimeout(() => {
-      const processed = processData(rawData, formData.axes || [], questionTypes);
+      const processed = processData(rawData, formData.axes || [], questionTypes, commentQuestions);
       setReportData({
         ...formData,
         ...processed
@@ -33,29 +31,9 @@ export default function AnalysisPage() {
   };
 
   const handleExportPDF = async () => {
-    if (!printRef.current || !reportData) return;
-    
-    setIsExporting(true);
-    try {
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pages = printRef.current.querySelectorAll('.report-page');
-
-      for (let i = 0; i < pages.length; i++) {
-        const canvas = await html2canvas(pages[i] as HTMLElement, { scale: 2, useCORS: true });
-        const imgData = canvas.toDataURL('image/png');
-        const pdfWidth = doc.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
-        if (i > 0) doc.addPage();
-        doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      }
-      doc.save(`${reportData.title || 'report'}.pdf`);
-    } catch (error) {
-      console.error('PDF Export Error:', error);
-      toast.error('حدث خطأ أثناء تصدير الـ PDF');
-    } finally {
-      setIsExporting(false);
-    }
+    // Native print works much better than jsPDF (it creates real PDF text, smaller files, handles SVGs correctly)
+    // The user should select "Save as PDF" in the print dialog.
+    window.print();
   };
 
   return (
@@ -90,7 +68,7 @@ export default function AnalysisPage() {
 
           {/* Preview Modal */}
           {isPreviewOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 print:hidden">
                <div className="bg-gray-200 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
                   <div className="bg-white px-6 py-4 border-b flex justify-between items-center">
                      <h3 className="font-bold text-lg text-gray-800">معاينة التقرير</h3>

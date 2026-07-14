@@ -1,6 +1,6 @@
 import { Axis, QuestionResult, ReportData } from '../types/analysis';
 
-export function processData(data: Record<string, unknown>[], currentAxes: Axis[], questionTypes?: Record<string, string>): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
+export function processData(data: Record<string, unknown>[], currentAxes: Axis[], questionTypes?: Record<string, string>, commentQuestions?: string[]): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
   if (!data || data.length === 0) {
     return {
       results: [],
@@ -22,6 +22,21 @@ export function processData(data: Record<string, unknown>[], currentAxes: Axis[]
     // Skip completely if we know it's a structural or filtering question (radio, select, etc)
     if (qType && ['radio', 'select', 'dropdown', 'checkbox'].includes(qType)) {
        return;
+    }
+
+    // Check if explicitly marked as a comment by the user
+    if (commentQuestions && commentQuestions.includes(question)) {
+      const texts: string[] = [];
+      data.forEach(row => {
+        const val = row[question];
+        if (val !== undefined && val !== null && val !== '') {
+          texts.push(String(val).trim());
+        }
+      });
+      if (texts.length > 0) {
+        comments.push({ question, answers: texts });
+      }
+      return; // Skip quantitative analysis
     }
 
     const answers: number[] = [];

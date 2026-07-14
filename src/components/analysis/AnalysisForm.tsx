@@ -9,7 +9,7 @@ import { listSignaturesServer } from '@/app/actions/signatures';
 import { toast } from 'sonner';
 
 interface AnalysisFormProps {
-  onGenerate: (data: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>) => void;
+  onGenerate: (data: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>, commentQuestions?: string[]) => void;
   isLoading: boolean;
 }
 
@@ -36,6 +36,9 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [questionTypes, setQuestionTypes] = useState<Record<string, string>>({});
   const [availableFilters, setAvailableFilters] = useState<{column: string, values: string[]}[]>([]);
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
+
+  const [availableCommentCols, setAvailableCommentCols] = useState<string[]>([]);
+  const [commentQuestions, setCommentQuestions] = useState<string[]>([]);
 
   useEffect(() => {
     async function loadForms() {
@@ -158,6 +161,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         setAvailableFilters(filterableCols.filter(f => f.values.length > 0));
         setActiveFilters({});
         
+        const allQuestionsKeys = analysisQuestions.map((q: Record<string, unknown>) => `${q.order}. ${q.text}`);
+        setAvailableCommentCols(allQuestionsKeys);
+        const textQuestions = analysisQuestions
+           .filter((q: Record<string, unknown>) => q.type === 'text' || q.type === 'textarea')
+           .map((q: Record<string, unknown>) => `${q.order}. ${q.text}`);
+        setCommentQuestions(textQuestions);
+        
         if (result.form.title) {
            setSurveyTitle(result.form.title);
            if (!title) setTitle(result.form.title);
@@ -217,6 +227,23 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                 setQuestionTypes({});
                 setAvailableFilters(filterableCols);
                 setActiveFilters({});
+                
+                const allCols = keys;
+                setAvailableCommentCols(allCols);
+                
+                const detectedComments: string[] = [];
+                allCols.forEach(key => {
+                   let isText = false;
+                   for(const row of rawData) {
+                      const val = String(row[key] || '').trim();
+                      if (val && isNaN(parseFloat(val)) && !["موافق", "محايد", "نعم", "لا", "ممتاز", "جيد", "مقبول", "ضعيف"].some(v => val.includes(v))) {
+                          isText = true;
+                          break;
+                      }
+                   }
+                   if (isText) detectedComments.push(key);
+                });
+                setCommentQuestions(detectedComments);
              }
          } catch(err) {
             console.error('Error parsing file for preview', err);
@@ -295,7 +322,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
        return;
     }
 
-    onGenerate(baseData, finalData, questionTypes);
+    onGenerate(baseData, finalData, questionTypes, commentQuestions);
   };
 
   return (
@@ -427,6 +454,40 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                      </div>
                   </div>
                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Comments Selection Section */}
+        {availableCommentCols.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800 dark:text-indigo-400">
+               أسئلة التعليقات والملاحظات (النصية)
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+               حدد الأسئلة التي ترغب في إدراجها كتعليقات في نهاية التقرير ولن تدخل في التحليل الكمي.
+            </p>
+            <div className="flex flex-wrap gap-4">
+               {availableCommentCols.map((col, idx) => {
+                  const isChecked = commentQuestions.includes(col);
+                  return (
+                     <label key={idx} className="flex items-center gap-2 cursor-pointer bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 hover:border-indigo-500 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          className="form-checkbox text-indigo-600 rounded"
+                          checked={isChecked}
+                          onChange={(e) => {
+                             if (e.target.checked) {
+                                setCommentQuestions([...commentQuestions, col]);
+                             } else {
+                                setCommentQuestions(commentQuestions.filter(c => c !== col));
+                             }
+                          }}
+                        />
+                        <span className="text-sm text-gray-800 dark:text-gray-200">{col}</span>
+                     </label>
+                  );
+               })}
             </div>
           </div>
         )}
