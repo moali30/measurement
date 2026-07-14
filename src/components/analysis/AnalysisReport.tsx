@@ -172,6 +172,25 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
           <p className="whitespace-pre-line">{data.manualComment}</p>
         </div>
       )}
+
+      {/* Aggregated User Comments */}
+      {data.comments && data.comments.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold mb-4 text-indigo-800 dark:text-indigo-400">تعليقات وملاحظات المشاركين</h3>
+          <div className="space-y-6">
+            {data.comments.map((commentGroup, idx) => (
+              <div key={idx} className="border-b border-gray-100 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
+                <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-3">{commentGroup.question}</h4>
+                <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-400">
+                  {commentGroup.answers.map((answer, aIdx) => (
+                    <li key={aIdx} className="bg-gray-50 dark:bg-gray-900 p-2 rounded-md">{answer}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

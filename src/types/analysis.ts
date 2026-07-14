@@ -32,4 +32,5 @@ export interface ReportData {
     college: string;
   };
   signatures: {name: string, url: string}[];
+  comments?: {question: string, answers: string[]}[];
 }

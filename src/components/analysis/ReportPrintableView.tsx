@@ -306,6 +306,29 @@ export default function ReportPrintableView({ data }: ReportPrintableViewProps) 
         <Footer signatures={data.signatures} />
       </div>
       
+      {/* صفحة 9 (أو أكثر): تعليقات وملاحظات المشاركين */}
+      {data.comments && data.comments.length > 0 && (
+        <div className="report-page bg-white mt-8" style={PAGE_STYLE}>
+          <Header title={data.title} subtitle="تعليقات وملاحظات المشاركين" logos={data.logos} />
+          
+          <div style={{ padding: '10px', fontSize: '15px' }}>
+            {data.comments.map((commentGroup, idx) => (
+              <div key={idx} style={{ marginBottom: '25px', padding: '15px', border: '1px solid #1a237e', borderRadius: '8px' }}>
+                <h4 style={{ margin: '0 0 15px 0', color: '#1a237e', fontSize: '18px', borderBottom: '2px solid #1a237e', paddingBottom: '5px', display: 'inline-block' }}>
+                  {commentGroup.question}
+                </h4>
+                <ul style={{ margin: 0, paddingRight: '20px', listStyleType: 'disc' }}>
+                  {commentGroup.answers.map((answer, aIdx) => (
+                    <li key={aIdx} style={{ marginBottom: '8px', lineHeight: '1.6' }}>{answer}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <Footer signatures={data.signatures} />
+        </div>
+      )}
     </div>
   );
 }

@@ -167,13 +167,15 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         answersByResponse.get(ans.responseId)!.push(ans);
       });
       
-      // We only care about likert questions for the analysis
-      const likertQuestions = questions.filter((q: any) => q.type === 'likert');
+      // We care about likert and text questions for the analysis
+      const analysisQuestions = questions.filter((q: any) => 
+        q.type === 'likert' || q.type === 'text' || q.type === 'textarea' || q.type === 'rating' || q.type === 'number'
+      );
       responses.forEach((resp: any) => {
         const row: Record<string, any> = {};
         const respAnswers = answersByResponse.get(resp.$id) || [];
         
-        likertQuestions.forEach((q: any) => {
+        analysisQuestions.forEach((q: any) => {
           const ans = respAnswers.find((a: any) => a.questionId === q.$id);
           // format question text with number if possible, or just use text
           const key = `${q.order}. ${q.text}`;

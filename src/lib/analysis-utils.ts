@@ -1,24 +1,32 @@
 import { Axis, QuestionResult, ReportData } from '../types/analysis';
 
-export function processData(data: Record<string, any>[], currentAxes: Axis[]): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment'> {
+export function processData(data: Record<string, any>[], currentAxes: Axis[]): Pick<ReportData, 'results' | 'resultsForAnalysis' | 'overallAverage' | 'axes' | 'autoComment' | 'comments'> {
   if (!data || data.length === 0) {
     return {
       results: [],
       resultsForAnalysis: [],
       overallAverage: 0,
       axes: currentAxes,
-      autoComment: generateAutoComment([], 0, currentAxes)
+      autoComment: generateAutoComment([], 0, currentAxes),
+      comments: []
     };
   }
 
   const questions = Object.keys(data[0] || {});
   const results: QuestionResult[] = [];
+  const comments: {question: string, answers: string[]}[] = [];
 
   questions.forEach((question, index) => {
-    const answers = data.map(row => {
+    const answers: number[] = [];
+    const textAnswers: string[] = [];
+
+    data.forEach(row => {
       let val = row[question];
+      if (val === undefined || val === null || val === '') return;
       if (typeof val === 'string') {
         const cleanVal = val.trim();
+        if (!cleanVal) return;
+        
         const likertMap: Record<string, number> = {
           "موافق جداً": 5, "موافق جدا": 5,
           "موافق": 4,
@@ -38,28 +46,47 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[]): P
           "نعم": 5,
           "لا": 1
         };
-        if (likertMap[cleanVal]) return likertMap[cleanVal];
+        
+        if (likertMap[cleanVal]) {
+           answers.push(likertMap[cleanVal]);
+        } else {
+           const num = parseFloat(cleanVal);
+           if (!isNaN(num)) {
+             answers.push(num);
+           } else {
+             textAnswers.push(cleanVal);
+           }
+        }
+      } else if (typeof val === 'number') {
+        answers.push(val);
       }
-      return parseFloat(val as string) || 0;
     });
-    const sum = answers.reduce((a, b) => a + b, 0);
-    const count = answers.length;
-    const mean = count > 0 ? sum / count : 0;
-    const relativeWeight = count > 0 ? (sum / (count * 5)) * 100 : 0;
 
-    let questionNumber = index + 1;
-    const numberMatch = question.match(/^(\d+)[.)\s]/);
-    if (numberMatch) {
-      questionNumber = parseInt(numberMatch[1], 10);
+    if (answers.length > 0) {
+      const sum = answers.reduce((a, b) => a + b, 0);
+      const count = answers.length;
+      const mean = count > 0 ? sum / count : 0;
+      const relativeWeight = count > 0 ? (sum / (count * 5)) * 100 : 0;
+  
+      let questionNumber = index + 1;
+      const numberMatch = question.match(/^(\d+)[.)\s]/);
+      if (numberMatch) {
+        questionNumber = parseInt(numberMatch[1], 10);
+      }
+  
+      results.push({
+        question,
+        questionNumber,
+        count,
+        mean: parseFloat(mean.toFixed(2)),
+        relativeWeight: parseFloat(relativeWeight.toFixed(2))
+      });
+    } else if (textAnswers.length > 0) {
+      comments.push({
+        question,
+        answers: textAnswers
+      });
     }
-
-    results.push({
-      question,
-      questionNumber,
-      count,
-      mean: parseFloat(mean.toFixed(2)),
-      relativeWeight: parseFloat(relativeWeight.toFixed(2))
-    });
   });
 
   results.sort((a, b) => a.questionNumber - b.questionNumber);
@@ -89,7 +116,8 @@ export function processData(data: Record<string, any>[], currentAxes: Axis[]): P
     resultsForAnalysis,
     overallAverage,
     axes: processedAxes,
-    autoComment
+    autoComment,
+    comments
   };
 }
 
