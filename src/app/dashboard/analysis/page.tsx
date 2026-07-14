@@ -7,12 +7,10 @@ import ReportPrintableView from '@/components/analysis/ReportPrintableView';
 import { processData } from '@/lib/analysis-utils';
 import { ReportData } from '@/types/analysis';
 import { Printer, Download } from 'lucide-react';
-import { toast } from 'sonner';
 
 export default function AnalysisPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const printRef = useRef<HTMLDivElement>(null);
@@ -73,8 +71,8 @@ export default function AnalysisPage() {
                   <div className="bg-white px-6 py-4 border-b flex justify-between items-center">
                      <h3 className="font-bold text-lg text-gray-800">معاينة التقرير</h3>
                      <div className="flex gap-3">
-                        <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm disabled:opacity-50 text-sm">
-                           {isExporting ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span> : <Download className="w-4 h-4" />}
+                        <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm text-sm">
+                           <Download className="w-4 h-4" />
                            حفظ كـ PDF
                         </button>
                         <button onClick={() => setIsPreviewOpen(false)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm">
