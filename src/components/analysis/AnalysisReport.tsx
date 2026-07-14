@@ -8,7 +8,7 @@ interface AnalysisReportProps {
   data: ReportData;
 }
 
-const COLORS = ['#4caf50', '#ffc107', '#f44336'];
+
 
 export default function AnalysisReport({ data }: AnalysisReportProps) {
   if (!data.results || data.results.length === 0) return null;
