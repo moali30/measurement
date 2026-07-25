@@ -3,7 +3,16 @@ import { PDF_CONFIG } from './config';
 import { createReportToken, deleteReportToken } from './token-store';
 
 function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  if (process.env.NEXT_PUBLIC_BASE_URL) {
+    return process.env.NEXT_PUBLIC_BASE_URL;
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return 'http://localhost:3000';
 }
 
 export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
