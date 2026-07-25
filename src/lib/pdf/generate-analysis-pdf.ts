@@ -1,6 +1,5 @@
 import { ReportData } from '@/types/analysis';
 import { PDF_CONFIG } from './config';
-import { createReportToken, deleteReportToken } from './token-store';
 
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_BASE_URL) {
@@ -16,10 +15,6 @@ function getBaseUrl() {
 }
 
 export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
-  const token = createReportToken(data);
-  const baseUrl = getBaseUrl();
-  const printUrl = `${baseUrl}/reports/print/analysis?token=${encodeURIComponent(token)}`;
-
   let browser;
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
     const sparticuz = await import('@sparticuz/chromium');
@@ -46,6 +41,16 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
 
   try {
     const page = await browser.newPage();
+
+    // Inject data into window object before the page loads
+    await page.addInitScript((reportData) => {
+      (window as any).__PRINT_DATA__ = reportData;
+    }, data);
+
+    const baseUrl = getBaseUrl();
+    const printUrl = `${baseUrl}/reports/print/analysis`;
+
+    console.log('[PDF] Navigating to', printUrl);
     await page.goto(printUrl, {
       waitUntil: 'domcontentloaded',
       timeout: 120000,
@@ -89,6 +94,5 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
     return Buffer.from(pdfBuffer);
   } finally {
     await browser.close();
-    deleteReportToken(token);
   }
 }
