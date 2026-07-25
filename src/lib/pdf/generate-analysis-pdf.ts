@@ -44,6 +44,7 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
 
     // Inject data into window object before the page loads
     await page.addInitScript((reportData) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).__PRINT_DATA__ = reportData;
     }, data);
 
