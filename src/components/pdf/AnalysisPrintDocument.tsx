@@ -34,12 +34,18 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
   useEffect(() => {
     setPrintReady(false);
-    let timer: number;
-    document.fonts.ready.then(() => {
-      timer = window.setTimeout(() => setPrintReady(true), 800);
-    });
+    
+    let timer = window.setTimeout(() => setPrintReady(true), 3000);
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => setPrintReady(true), 800);
+      });
+    }
+
     return () => {
-      if (timer) window.clearTimeout(timer);
+      window.clearTimeout(timer);
     };
   }, [data]);
 
