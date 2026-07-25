@@ -71,8 +71,10 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
       displayHeaderFooter: true,
       headerTemplate: `<span></span>`,
       footerTemplate: `
-        <div style="width:100%;font-size:10pt;color:#000;font-family:Cairo,sans-serif;text-align:center;direction:rtl;">
-          صفحة <span class="pageNumber"></span> من <span class="totalPages"></span>
+        <div style="width:100%; display:flex; justify-content:center; align-items:center; padding-bottom: 5mm; font-family:Cairo,sans-serif; direction:rtl;">
+          <div style="background-color:#e8eaf6; color:#1a237e; font-size:10pt; font-weight:bold; padding:4px 16px; border-radius:12px; border:1px solid #c5cae9;">
+            صفحة <span class="pageNumber"></span> / <span class="totalPages"></span>
+          </div>
         </div>
       `,
     });

@@ -278,7 +278,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0; /* Let playwright margins control it */
+    margin: 20mm 15mm 25mm 15mm;
   }
 
   .print-document--preview {
