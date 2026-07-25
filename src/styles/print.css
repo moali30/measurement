@@ -89,35 +89,15 @@
   list-style: none;
 }
 
-.print-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 5mm;
-  padding-bottom: 3mm;
-  border-bottom: 2px solid #1a237e;
-  break-after: avoid;
-  page-break-after: avoid;
-}
-
-.print-header__logo {
-  width: 26mm;
-  display: flex;
-  justify-content: center;
-}
-
-.print-header__logo img {
-  max-height: 16mm;
-  object-fit: contain;
-}
-
-.print-header__title {
-  flex: 1;
+.print-section-title {
   text-align: center;
-  margin: 0;
+  margin: 0 0 5mm;
   font-size: 14pt;
   color: #1a237e;
+  border-bottom: 2px solid #1a237e;
+  padding-bottom: 2mm;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .print-footer {

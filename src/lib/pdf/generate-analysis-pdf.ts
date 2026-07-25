@@ -33,7 +33,7 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
   try {
     const page = await browser.newPage();
     await page.goto(printUrl, {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 120000,
     });
 
@@ -44,13 +44,24 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
-        top: `${PDF_CONFIG.margins.top}mm`,
+        top: `35mm`,
         bottom: `${PDF_CONFIG.margins.bottom}mm`,
         left: `${PDF_CONFIG.margins.left}mm`,
         right: `${PDF_CONFIG.margins.right}mm`,
       },
       displayHeaderFooter: true,
-      headerTemplate: '<div></div>',
+      headerTemplate: `
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; padding:0 ${PDF_CONFIG.margins.right}mm 0 ${PDF_CONFIG.margins.left}mm; font-family:Cairo,sans-serif; direction:rtl; border-bottom: 2px solid #1a237e; margin-bottom: 5mm;">
+          <div style="flex:1; text-align:right; font-size:12pt; color:#1a237e; font-weight:bold;">
+            ${data.title}
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            ${data.logos?.quality ? `<img src="${data.logos.quality}" style="max-height:16mm; object-fit:contain;" />` : ''}
+            ${data.logos?.university ? `<img src="${data.logos.university}" style="max-height:16mm; object-fit:contain;" />` : ''}
+            ${data.logos?.college ? `<img src="${data.logos.college}" style="max-height:16mm; object-fit:contain;" />` : ''}
+          </div>
+        </div>
+      `,
       footerTemplate: `
         <div style="width:100%;font-size:8px;color:#666;font-family:Cairo,sans-serif;padding:0 ${PDF_CONFIG.margins.right}mm 0 ${PDF_CONFIG.margins.left}mm;direction:rtl;">
           <span style="float:right;">${data.reportDate}</span>

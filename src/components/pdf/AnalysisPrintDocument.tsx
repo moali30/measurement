@@ -14,7 +14,6 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { PrintHeader } from './shared/PrintHeader';
 import { PrintFooter } from './shared/PrintFooter';
 import {
   cleanAutoCommentHtml,
@@ -35,8 +34,13 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
   useEffect(() => {
     setPrintReady(false);
-    const timer = window.setTimeout(() => setPrintReady(true), 800);
-    return () => window.clearTimeout(timer);
+    let timer: number;
+    document.fonts.ready.then(() => {
+      timer = window.setTimeout(() => setPrintReady(true), 800);
+    });
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
   }, [data]);
 
   if (!data.results?.length) return null;
@@ -93,7 +97,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
       {/* Question results — single table with CSS header repeat */}
       <section className="print-section print-section--flow">
-        <PrintHeader subtitle="نتائج تحليل الاستبيان" logos={data.logos} />
+        <h2 className="print-section-title">نتائج تحليل الاستبيان</h2>
         <table className="print-table">
           <thead>
             <tr>
@@ -122,13 +126,12 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           <span>المتوسط العام للاستبيان:</span>
           <span className="print-kpi__value">{data.overallAverage}%</span>
         </div>
-        <PrintFooter signatures={data.signatures} />
       </section>
 
       {/* Axes table */}
       {data.axes.length > 0 && (
         <section className="print-section print-section--flow">
-          <PrintHeader subtitle="نتائج تحليل المحاور" logos={data.logos} />
+          <h2 className="print-section-title">نتائج تحليل المحاور</h2>
           <table className="print-table">
             <thead>
               <tr>
@@ -153,7 +156,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
               ))}
             </tbody>
           </table>
-          <PrintFooter signatures={data.signatures} />
         </section>
       )}
 
@@ -163,7 +165,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           className={`print-section print-chart-block${useLandscapeAxes ? ' print-chart-block--landscape' : ''}`}
           style={useLandscapeAxes ? { page: 'landscape' } as React.CSSProperties : undefined}
         >
-          <PrintHeader subtitle="مقارنة بين المحاور" logos={data.logos} />
+          <h2 className="print-section-title">مقارنة بين المحاور</h2>
           <div className="print-chart-wrap">
             <BarChart
               width={useLandscapeAxes ? 900 : 650}
@@ -183,13 +185,12 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
               <Bar dataKey="average" fill="#10b981" name="متوسط الوزن النسبي (%)" isAnimationActive={false} />
             </BarChart>
           </div>
-          <PrintFooter signatures={data.signatures} />
         </section>
       )}
 
       {/* Charts section */}
       <section className="print-section">
-        <PrintHeader subtitle="الرسوم البيانية والمؤشرات" logos={data.logos} />
+        <h2 className="print-section-title">الرسوم البيانية والمؤشرات</h2>
 
         <div className="print-chart-block">
           <h3>أعلى 10 أسئلة حسب الوزن النسبي</h3>
@@ -227,13 +228,11 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
             </div>
           </div>
         )}
-
-        <PrintFooter signatures={data.signatures} />
       </section>
 
       {/* Final analysis */}
       <section className="print-section print-section--flow">
-        <PrintHeader subtitle="التحليل النهائي والاستنتاجات" logos={data.logos} />
+        <h2 className="print-section-title">التحليل النهائي والاستنتاجات</h2>
 
         <div className="print-narrative">
           <div className="print-narrative-box" style={{ textAlign: 'center', borderColor: '#1a237e' }}>
@@ -269,14 +268,12 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
             </div>
           )}
         </div>
-
-        <PrintFooter signatures={data.signatures} />
       </section>
 
       {/* Participant comments */}
       {data.comments && data.comments.length > 0 && (
         <section className="print-section print-section--flow">
-          <PrintHeader subtitle="تعليقات وملاحظات المشاركين" logos={data.logos} />
+          <h2 className="print-section-title">تعليقات وملاحظات المشاركين</h2>
           {data.comments.map((group) => (
             <div key={group.question} className="print-comment-group">
               <h4>{group.question}</h4>
@@ -287,9 +284,11 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
               </ul>
             </div>
           ))}
-          <PrintFooter signatures={data.signatures} />
         </section>
       )}
+
+      {/* Single footer with signatures at the very end of the document */}
+      <PrintFooter signatures={data.signatures} />
     </div>
   );
 }
