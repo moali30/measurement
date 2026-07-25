@@ -1,5 +1,5 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
+import '@/styles/print.css';
 
 import React, { useEffect, useState } from 'react';
 import { ReportData } from '@/types/analysis';
