@@ -13,11 +13,10 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
 
   let browser;
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const chromium = require('@sparticuz/chromium');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const playwright = require('playwright-core');
-    
+    const sparticuz = await import('@sparticuz/chromium');
+    const chromium = sparticuz.default || sparticuz;
+    const playwright = await import('playwright-core');
+
     // For Vercel Edge / Serverless functions
     browser = await playwright.chromium.launch({
       args: [...chromium.args, '--font-render-hinting=none'],
