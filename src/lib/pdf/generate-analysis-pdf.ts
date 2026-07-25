@@ -11,12 +11,24 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
   const baseUrl = getBaseUrl();
   const printUrl = `${baseUrl}/reports/print/analysis?token=${encodeURIComponent(token)}`;
 
-  const { chromium } = await import('playwright');
-
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--font-render-hinting=none'],
-  });
+  let browser;
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    const chromium = require('@sparticuz/chromium');
+    const playwright = require('playwright-core');
+    
+    // For Vercel Edge / Serverless functions
+    browser = await playwright.chromium.launch({
+      args: [...chromium.args, '--font-render-hinting=none'],
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  } else {
+    const { chromium } = await import('playwright');
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--font-render-hinting=none'],
+    });
+  }
 
   try {
     const page = await browser.newPage();

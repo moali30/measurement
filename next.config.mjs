@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ["@sparticuz/chromium", "playwright-core"]
+  },
   webpack: (config, { dev }) => {
     config.resolve.alias.canvas = false;
     if (dev) {
