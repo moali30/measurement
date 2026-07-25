@@ -21,7 +21,7 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
     browser = await playwright.chromium.launch({
       args: [...chromium.args, '--font-render-hinting=none'],
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: true,
     });
   } else {
     const { chromium } = await import('playwright');
