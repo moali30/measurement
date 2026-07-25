@@ -63,30 +63,16 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
-        top: `35mm`,
-        bottom: `${PDF_CONFIG.margins.bottom}mm`,
-        left: `${PDF_CONFIG.margins.left}mm`,
-        right: `${PDF_CONFIG.margins.right}mm`,
+        top: `15mm`,
+        bottom: `20mm`,
+        left: `15mm`,
+        right: `15mm`,
       },
       displayHeaderFooter: true,
-      headerTemplate: `
-        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; padding:0 ${PDF_CONFIG.margins.right}mm 0 ${PDF_CONFIG.margins.left}mm; font-family:Cairo,sans-serif; direction:rtl; border-bottom: 2px solid #1a237e; margin-bottom: 5mm;">
-          <div style="flex:1; text-align:right; font-size:12pt; color:#1a237e; font-weight:bold;">
-            ${data.title}
-          </div>
-          <div style="display:flex; gap:12px; align-items:center;">
-            ${data.logos?.quality ? `<img src="${data.logos.quality}" style="max-height:16mm; object-fit:contain;" />` : ''}
-            ${data.logos?.university ? `<img src="${data.logos.university}" style="max-height:16mm; object-fit:contain;" />` : ''}
-            ${data.logos?.college ? `<img src="${data.logos.college}" style="max-height:16mm; object-fit:contain;" />` : ''}
-          </div>
-        </div>
-      `,
+      headerTemplate: `<span></span>`,
       footerTemplate: `
-        <div style="width:100%;font-size:8px;color:#666;font-family:Cairo,sans-serif;padding:0 ${PDF_CONFIG.margins.right}mm 0 ${PDF_CONFIG.margins.left}mm;direction:rtl;">
-          <span style="float:right;">${data.reportDate}</span>
-          <span style="display:block;text-align:center;">
-            صفحة <span class="pageNumber"></span> من <span class="totalPages"></span>
-          </span>
+        <div style="width:100%;font-size:10pt;color:#000;font-family:Cairo,sans-serif;text-align:center;direction:rtl;">
+          صفحة <span class="pageNumber"></span> من <span class="totalPages"></span>
         </div>
       `,
     });

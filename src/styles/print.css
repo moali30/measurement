@@ -159,13 +159,13 @@
 }
 
 .print-table td {
-  padding: 2mm;
+  padding: 3mm 2mm;
   border: 1px solid #dddddd;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .print-table tbody tr:nth-child(even) td {
-  background: #fafafa;
+  background: #f8f9fa;
 }
 
 .print-table .num {
@@ -185,21 +185,21 @@
 .print-kpi {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 4mm 0;
-  padding: 4mm;
+  margin: 6mm 0;
+  padding: 6mm;
   background: #e8eaf6;
   border: 2px solid #1a237e;
-  border-radius: 4px;
+  border-radius: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12pt;
+  font-size: 14pt;
   font-weight: 700;
 }
 
 .print-kpi__value {
   color: #1a237e;
-  font-size: 14pt;
+  font-size: 16pt;
   direction: ltr;
   unicode-bidi: embed;
 }
@@ -207,7 +207,7 @@
 .print-chart-block {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 6mm 0;
+  margin: 8mm 0;
 }
 
 .print-chart-block h3,
@@ -215,12 +215,7 @@
   margin: 0 0 4mm;
   text-align: center;
   color: #1a237e;
-  font-size: 12pt;
-}
-
-.print-chart-block--landscape {
-  break-before: page;
-  page-break-before: always;
+  font-size: 13pt;
 }
 
 .print-chart-wrap {
@@ -230,8 +225,8 @@
 }
 
 .print-narrative {
-  font-size: 10.5pt;
-  line-height: 1.7;
+  font-size: 11pt;
+  line-height: 1.8;
   orphans: 3;
   widows: 3;
 }
@@ -239,30 +234,32 @@
 .print-narrative h4,
 .print-narrative h5 {
   color: #1a237e;
-  margin: 0 0 3mm;
+  margin: 0 0 4mm;
 }
 
 .print-narrative-box {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 5mm;
-  padding: 4mm;
-  border: 1px solid #cccccc;
+  margin-bottom: 6mm;
+  padding: 6mm;
+  border: 1px solid #c5cae9;
+  border-radius: 6px;
+  background: #fafafa;
 }
 
 .print-comment-group {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 5mm;
-  padding: 4mm;
+  margin-bottom: 6mm;
+  padding: 5mm;
   border: 1px solid #1a237e;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .print-comment-group h4 {
   margin: 0 0 3mm;
   color: #1a237e;
-  font-size: 11pt;
+  font-size: 12pt;
   border-bottom: 2px solid #1a237e;
   padding-bottom: 2mm;
   display: inline-block;
@@ -281,10 +278,7 @@
 @media print {
   @page {
     size: A4 portrait;
-  }
-
-  @page landscape {
-    size: A4 landscape;
+    margin: 0; /* Let playwright margins control it */
   }
 
   .print-document--preview {

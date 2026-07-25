@@ -57,7 +57,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
   const pieData = getWeightDistributionPieData(data.results);
   const axesChartData = getAxesChartData(data.axes);
   const { best: bestAxis, worst: worstAxis } = getAxisExtremes(data.axes);
-  const useLandscapeAxes = axesChartData.length > 6;
 
   return (
     <div
@@ -96,9 +95,8 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           )}
         </div>
 
-        <div className="print-cover__meta">
+        <div className="print-cover__meta" style={{ justifyContent: 'center' }}>
           <div>تاريخ طرح الاستبيان: {data.surveyDate}</div>
-          <div>تاريخ إعداد التقرير: {data.reportDate}</div>
         </div>
       </section>
 
@@ -137,7 +135,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
       {/* Axes table */}
       {data.axes.length > 0 && (
-        <section className="print-section print-section--flow">
+        <section className="print-section print-section--flow" style={{ breakBefore: 'page', pageBreakBefore: 'always' }}>
           <h2 className="print-section-title">نتائج تحليل المحاور</h2>
           <table className="print-table">
             <thead>
@@ -168,15 +166,12 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
       {/* Axis comparison chart */}
       {data.axes.length > 0 && (
-        <section
-          className={`print-section print-chart-block${useLandscapeAxes ? ' print-chart-block--landscape' : ''}`}
-          style={useLandscapeAxes ? { page: 'landscape' } as React.CSSProperties : undefined}
-        >
+        <section className="print-section print-chart-block">
           <h2 className="print-section-title">مقارنة بين المحاور</h2>
           <div className="print-chart-wrap">
             <BarChart
-              width={useLandscapeAxes ? 900 : 650}
-              height={useLandscapeAxes ? 380 : 340}
+              width={650}
+              height={340}
               data={axesChartData}
             >
               <CartesianGrid strokeDasharray="3 3" />
@@ -295,7 +290,9 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       )}
 
       {/* Single footer with signatures at the very end of the document */}
-      <PrintFooter signatures={data.signatures} />
+      <div style={{ breakInside: 'avoid', pageBreakInside: 'avoid', marginTop: '10mm' }}>
+        <PrintFooter signatures={data.signatures} />
+      </div>
     </div>
   );
 }
