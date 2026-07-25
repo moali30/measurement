@@ -18,9 +18,13 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
     const playwright = await import('playwright-core');
 
     // For Vercel Edge / Serverless functions
+    const exePath = await chromium.executablePath(
+      'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
+    );
+    
     browser = await playwright.chromium.launch({
       args: [...chromium.args, '--font-render-hinting=none'],
-      executablePath: await chromium.executablePath(),
+      executablePath: exePath,
       headless: true,
     });
   } else {
