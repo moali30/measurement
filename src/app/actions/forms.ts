@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 import { createAdminClient } from '@/lib/supabase/server';
 
@@ -163,7 +164,7 @@ export async function uploadFormFile(formData: FormData) {
     const ext = file.name.split('.').pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
 
-    const { data, error } = await supabase.storage.from('form_files').upload(fileName, buffer, {
+    const { error } = await supabase.storage.from('form_files').upload(fileName, buffer, {
       contentType: file.type,
       upsert: false
     });

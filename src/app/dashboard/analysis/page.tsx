@@ -8,8 +8,7 @@ import { processData } from '@/lib/analysis-utils';
 import { ReportData } from '@/types/analysis';
 import { Printer, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+import { PDF_CONFIG } from '@/lib/pdf/config';
 
 export default function AnalysisPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -33,49 +32,38 @@ export default function AnalysisPage() {
   };
 
   const handleExportPDF = async () => {
-    if (!printRef.current) return;
+    if (!reportData) return;
     setIsExporting(true);
-    
+
     try {
       toast.info('جاري تجهيز التقرير، يرجى الانتظار...');
-      
-      const pages = printRef.current.querySelectorAll('.report-page');
-      if (pages.length === 0) {
-        setIsExporting(false);
-        return;
+
+      const response = await fetch('/api/reports/analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reportData),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'فشل إنشاء ملف PDF');
       }
-      
-      // Create A4 PDF (210mm x 297mm)
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      for (let i = 0; i < pages.length; i++) {
-        const pageEl = pages[i] as HTMLElement;
-        
-        // Render canvas with scale 2 for high quality
-        const canvas = await html2canvas(pageEl, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff'
-        });
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        
-        if (i > 0) {
-          pdf.addPage();
-        }
-        
-        // The element is styled to be A4 proportions, but we ensure it fits perfectly
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      }
-      
-      pdf.save(`تقرير_${reportData?.title || 'تحليل_الاستبيان'}.pdf`);
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = PDF_CONFIG.buildFilename(reportData.title, reportData.reportDate);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       toast.success('تم تصدير التقرير بنجاح!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error exporting PDF:', err);
-      toast.error(`خطأ: ${err.message || 'حدث خطأ أثناء التصدير'}`);
+      const message = err instanceof Error ? err.message : 'حدث خطأ أثناء التصدير';
+      toast.error(`خطأ: ${message}`);
     } finally {
       setIsExporting(false);
     }

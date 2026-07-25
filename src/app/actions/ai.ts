@@ -31,7 +31,7 @@ export async function generateQuestionsFromDocument(base64Document: string) {
     }
 
     const ocrData = await ocrResponse.json();
-    const markdownContent = ocrData.pages.map((p: any) => p.markdown).join("\n\n---\n\n");
+    const markdownContent = ocrData.pages.map((p: { markdown: string }) => p.markdown).join("\n\n---\n\n");
 
     // المرحلة الثانية: تحويل الـ Markdown إلى JSON للأسئلة
     const promptText = `أنت مساعد ذكي لإنشاء الاستبيانات. لقد قمت بقراءة استبيان باستخدام تقنية OCR وهذا هو المحتوى النصي المستخرج منه بتنسيق Markdown:
@@ -110,8 +110,9 @@ ${markdownContent}
     }
 
     return { success: true, questions: parsedQuestions };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI Generation Error:", error);
-    return { success: false, error: error.message || "حدث خطأ غير متوقع أثناء معالجة المستند" };
+    const err = error as Error;
+    return { success: false, error: err.message || "حدث خطأ غير متوقع أثناء معالجة المستند" };
   }
 }

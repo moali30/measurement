@@ -11,24 +11,21 @@ async function analyze() {
   const { data: forms } = await supabase.from('forms').select('id, title');
   if (!forms) return console.log("No forms");
 
-  let totalDeleted = 0;
+
 
   for (const form of forms) {
     const { data: questions } = await supabase.from('questions').select('id, text, order_index').eq('form_id', form.id);
     if (!questions) continue;
 
-    // group by text
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const byText = new Map<string, any[]>();
     for (const q of questions) {
       if (!byText.has(q.text)) byText.set(q.text, []);
       byText.get(q.text)!.push(q);
     }
-
-    let formHasDupes = false;
     const entries = Array.from(byText.entries());
     for (const [text, qs] of entries) {
       if (qs.length > 1) {
-        formHasDupes = true;
         console.log(`\nForm: ${form.title} | Question: ${text.substring(0, 50)}... (${qs.length} duplicates)`);
         
         for (const q of qs) {

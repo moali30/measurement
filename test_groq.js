@@ -1,3 +1,4 @@
+/* eslint-disable */
 const fs = require('fs');
 const env = fs.readFileSync('.env.local', 'utf8');
 const apiKey = env.split('GROQ_API_KEY=')[1].split('\n')[0].trim();

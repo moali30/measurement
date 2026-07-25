@@ -18,7 +18,7 @@ export default function PlanAndUsagePage() {
 
   // Supabase Free Tier Limits
   const MAX_DB_SIZE_MB = 500;
-  const MAX_STORAGE_MB = 1024; // 1GB
+
   const MAX_USERS = 50000;
 
   useEffect(() => {
@@ -35,7 +35,6 @@ export default function PlanAndUsagePage() {
 
   const dbPercentage = stats ? Math.min(100, (stats.estimatedMb / MAX_DB_SIZE_MB) * 100).toFixed(2) : "0";
   // Assuming signatures take approx DB space, but we also show storage as 0 if not using buckets
-  const storagePercentage = "0"; 
   const usersPercentage = stats ? Math.min(100, (stats.users / MAX_USERS) * 100).toFixed(2) : "0";
 
   return (

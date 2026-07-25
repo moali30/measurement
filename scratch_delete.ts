@@ -17,6 +17,7 @@ async function cleanDuplicates() {
     const { data: questions } = await supabase.from('questions').select('id, text, order_index').eq('form_id', form.id);
     if (!questions) continue;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const byText = new Map<string, any[]>();
     for (const q of questions) {
       if (!byText.has(q.text)) byText.set(q.text, []);
@@ -29,6 +30,7 @@ async function cleanDuplicates() {
         console.log(`\nForm: ${form.title} | Question: ${text.substring(0, 50)}... (${qs.length} duplicates)`);
         
         // Find which ones have answers
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const qsWithCounts = await Promise.all(qs.map(async (q: any) => {
           const { count } = await supabase.from('answers').select('*', { count: 'exact', head: true }).eq('question_id', q.id);
           return { ...q, count: count || 0 };

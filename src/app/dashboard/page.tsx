@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
-import { FileText, Users, Activity, BarChart2, Plus, ArrowUpLeft, TrendingUp } from "lucide-react";
+import { FileText, Users, Activity, Plus, ArrowUpLeft, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
