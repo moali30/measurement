@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
-import { createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import type { ExportFormResult } from '@/types/export';
 
 export async function listFormsServer() {
   try {
@@ -351,5 +352,142 @@ export async function duplicateFormServer(formId: string) {
     return { success: true, newFormId: newForm.id };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* تصدير نتائج الاستبيانات إلى Excel (بدون الحاجة لفتح الاستبيان)      */
+/* ------------------------------------------------------------------ */
+
+const EXPORT_PAGE_SIZE = 1000;
+
+/** أنواع الأسئلة التي تُصدَّر كأرقام وليس كنص */
+const NUMERIC_QUESTION_TYPES = new Set(['rating', 'linear_scale', 'number']);
+
+/**
+ * يجلب كل السجلات المرتبطة بنموذج معيّن على دفعات، بدون أي حد أقصى.
+ * الترتيب الثابت إلزامي — بدونه قد تتكرر أو تسقط صفوف بين الدفعات.
+ */
+async function fetchAllByFormId(
+  supabase: any,
+  table: string,
+  columns: string,
+  formId: string,
+  orderColumns: string[]
+) {
+  const out: any[] = [];
+  let offset = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let query = supabase.from(table).select(columns).eq('form_id', formId);
+    for (const col of orderColumns) query = query.order(col, { ascending: true });
+
+    const { data, error } = await query.range(offset, offset + EXPORT_PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    out.push(...data);
+    if (data.length < EXPORT_PAGE_SIZE) break;
+    offset += EXPORT_PAGE_SIZE;
+  }
+
+  return out;
+}
+
+/** يختار القيمة المناسبة للخلية حسب نوع السؤال */
+function resolveAnswerValue(answer: any, questionType: string): string | number {
+  if (!answer) return '';
+
+  const hasNumber = answer.number_value !== null && answer.number_value !== undefined;
+  const hasText = answer.text_value !== null && answer.text_value !== undefined && answer.text_value !== '';
+
+  // الأسئلة الرقمية (تقييم / مقياس خطي) تُصدَّر كأرقام لتسهيل الحساب
+  if (NUMERIC_QUESTION_TYPES.has(questionType) && hasNumber) return Number(answer.number_value);
+
+  // غير ذلك: النص هو المصدر الأصلي — يحافظ على الأصفار البادئة والأرقام الطويلة
+  if (hasText) return String(answer.text_value);
+  if (hasNumber) return Number(answer.number_value);
+
+  return '';
+}
+
+/**
+ * يبني بيانات ورقة Excel لاستبيان واحد — يُستدعى من صفحة قائمة
+ * الاستبيانات مباشرة دون الحاجة لفتح صفحة تفاصيل الاستبيان.
+ *
+ * التصدير الجماعي ينفّذ استدعاءً منفصلاً لكل استبيان حتى لا يتجاوز
+ * أي طلب واحد مهلة التنفيذ على Vercel.
+ */
+export async function exportFormResponsesServer(formId: string): Promise<ExportFormResult> {
+  try {
+    if (!formId) return { success: false, error: 'لم يتم تحديد أي استبيان', sheet: null };
+
+    // التحقق من الجلسة — بيانات الردود لا تُتاح إلا لمستخدم مسجّل الدخول
+    const authClient = await createClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'يجب تسجيل الدخول لتصدير النتائج', sheet: null };
+    }
+
+    const supabase = createAdminClient();
+
+    const { data: form, error: formError } = await supabase
+      .from('forms')
+      .select('id, title')
+      .eq('id', formId)
+      .single();
+
+    if (formError || !form) {
+      return { success: false, error: 'الاستبيان غير موجود', sheet: null };
+    }
+
+    const questions = await fetchAllByFormId(
+      supabase, 'questions', 'id, text, type, order_index', formId, ['order_index', 'id']
+    );
+    const responses = await fetchAllByFormId(
+      supabase, 'responses', 'id, submitted_at', formId, ['submitted_at', 'id']
+    );
+    const answers = responses.length
+      ? await fetchAllByFormId(
+          supabase, 'response_answers', 'id, response_id, question_id, text_value, number_value', formId, ['id']
+        )
+      : [];
+
+    // فهرسة الإجابات: response_id -> question_id -> answer
+    const byResponse = new Map<string, Map<string, any>>();
+    for (const a of answers) {
+      let bucket = byResponse.get(a.response_id);
+      if (!bucket) { bucket = new Map(); byResponse.set(a.response_id, bucket); }
+      bucket.set(a.question_id, a);
+    }
+
+    const headers = ['#', 'التاريخ', ...questions.map((q: any) => String(q.text || ''))];
+
+    const rows = responses.map((r: any, idx: number) => {
+      const bucket = byResponse.get(r.id);
+      const row: (string | number | null)[] = [idx + 1, r.submitted_at || ''];
+
+      for (const q of questions) {
+        row.push(resolveAnswerValue(bucket?.get(q.id), String(q.type || '')));
+      }
+
+      return row;
+    });
+
+    return {
+      success: true,
+      sheet: {
+        formId: form.id,
+        title: form.title || 'استبيان',
+        headers,
+        rows,
+        responsesCount: responses.length,
+        questionsCount: questions.length,
+      },
+    };
+  } catch (error: any) {
+    console.error('exportFormResponsesServer:', formId, error?.message);
+    return { success: false, error: error?.message || 'تعذّر تحميل بيانات الاستبيان', sheet: null };
   }
 }
