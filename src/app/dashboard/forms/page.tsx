@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, FileText, MoreHorizontal, Trash2, Share2, BarChart2, Eye, EyeOff, Clock, CheckCircle, Edit3, Grid, List, ArrowUpDown, CalendarDays, FolderOpen, Copy, FileSpreadsheet, CheckSquare, Square, X, Loader2 } from "lucide-react";
+import { Plus, Search, FileText, MoreHorizontal, Trash2, BarChart2, Eye, EyeOff, Clock, CheckCircle, Edit3, Grid, List, ArrowUpDown, CalendarDays, FolderOpen, Copy, FileSpreadsheet, CheckSquare, Square, X, Loader2, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { listFormsServer, deleteFormServer, toggleFormStatusServer, duplicateFormServer, exportFormResponsesServer } from "@/app/actions/dashboard";
@@ -10,6 +10,7 @@ import { downloadSheetsAsWorkbook, todayStamp } from "@/lib/excel-export";
 import type { ExportSheetData } from "@/types/export";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
+import { FormShareDialog } from "@/components/forms/FormShareDialog";
 
 interface Form { $id: string; title: string; description: string; status: string; responsesCount: number; createdAt: string; slug: string; }
 
@@ -27,6 +28,7 @@ export default function FormsListPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exportingIds, setExportingIds] = useState<string[]>([]);
   const [bulkExporting, setBulkExporting] = useState(false);
+  const [shareForm, setShareForm] = useState<Form | null>(null);
   const { user } = useAuth();
   const { confirm } = useConfirm();
 
@@ -64,6 +66,11 @@ export default function FormsListPage() {
       }
     } catch(e) { console.error(e); }
     setOpenMenuId(null);
+  };
+
+  const openShareDialog = (form: Form) => {
+    setOpenMenuId(null);
+    setShareForm(form);
   };
 
   const duplicateForm = async (id: string) => {
@@ -274,7 +281,7 @@ export default function FormsListPage() {
                   {isExporting(form.$id) ? "جاري التصدير..." : "تحميل النتائج (Excel)"}
                 </button>
                 <button onClick={()=>toggleStatus(form)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-gray-50 text-gray-700">{form.status==='active'?<><EyeOff size={14} className="text-gray-500"/>أرشفة</>:<><Eye size={14} className="text-emerald-500"/>تفعيل</>}</button>
-                <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/f/${form.slug}`);setOpenMenuId(null);}} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-gray-50 text-gray-700"><Share2 size={14} className="text-gray-400"/>نسخ الرابط</button>
+                <button onClick={()=>openShareDialog(form)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-blue-50 text-blue-700"><QrCode size={14} className="text-blue-500"/>مشاركة الاستبيان وQR</button>
                 <button onClick={()=>duplicateForm(form.$id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-blue-50 text-blue-600"><Copy size={14}/>إنشاء نسخة (Duplicate)</button>
                 <hr className="my-1.5 border-gray-100"/>
                 <button onClick={()=>deleteForm(form.$id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><Trash2 size={14}/>حذف</button>
@@ -287,6 +294,14 @@ export default function FormsListPage() {
         <div className="flex items-center justify-between pt-3 border-t border-gray-50">
           <div className="flex items-center gap-1 text-xs text-gray-400"><Clock size={12}/>{fmtDate(form.createdAt)}</div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={()=>openShareDialog(form)}
+              title="مشاركة الاستبيان وQR"
+              className="flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition-colors"
+            >
+              <QrCode size={12}/>
+              مشاركة
+            </button>
             <button
               onClick={()=>exportOne(form)}
               disabled={isExporting(form.$id) || (form.responsesCount||0)===0}
@@ -307,7 +322,7 @@ export default function FormsListPage() {
     const allInTableSelected = areAllSelected(list);
 
     return (
-    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-100">
         <thead className="bg-gray-50/80"><tr>
           <th className="px-4 py-3.5 w-10">
@@ -319,7 +334,7 @@ export default function FormsListPage() {
           <th className="px-6 py-3.5 text-right text-xs font-semibold text-gray-500">الحالة</th>
           <th className="px-6 py-3.5 text-right text-xs font-semibold text-gray-500">الردود</th>
           <th className="px-6 py-3.5 text-right text-xs font-semibold text-gray-500">التاريخ</th>
-          <th className="px-6 py-3.5 w-32"></th>
+          <th className="px-6 py-3.5 w-44"></th>
         </tr></thead>
         <tbody className="divide-y divide-gray-50">
           {list.map(form=>(
@@ -330,13 +345,16 @@ export default function FormsListPage() {
               <td className="px-6 py-4 text-sm text-gray-600 font-medium">{form.responsesCount||0}</td>
               <td className="px-6 py-4 text-sm text-gray-400">{fmtDate(form.createdAt)}</td>
               <td className="px-6 py-4">
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                <div className="flex items-center gap-1">
+                  <button onClick={()=>openShareDialog(form)} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="مشاركة الاستبيان وQR"><QrCode size={16}/></button>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                   <button onClick={()=>exportOne(form)} disabled={isExporting(form.$id) || (form.responsesCount||0)===0} className="p-2 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 disabled:opacity-40 disabled:hover:bg-transparent" title={(form.responsesCount||0)===0 ? "لا توجد ردود لتصديرها" : "تحميل النتائج Excel"}>
                     {isExporting(form.$id) ? <Loader2 size={16} className="animate-spin"/> : <FileSpreadsheet size={16}/>}
                   </button>
                   <button onClick={()=>toggleStatus(form)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title={form.status==='active'?'أرشفة':'تفعيل'}>{form.status==='active'?<EyeOff size={16}/>:<Eye size={16}/>}</button>
                   <button onClick={()=>duplicateForm(form.$id)} className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500" title="إنشاء نسخة"><Copy size={16}/></button>
                   <button onClick={()=>deleteForm(form.$id)} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
+                  </div>
                 </div>
               </td>
             </tr>
@@ -468,6 +486,15 @@ export default function FormsListPage() {
           {filtered.map(form => renderFormCard(form))}
         </div>
       ) : renderFormsTable(filtered)}
+
+      {shareForm && (
+        <FormShareDialog
+          title={shareForm.title}
+          slug={shareForm.slug}
+          status={shareForm.status}
+          onClose={() => setShareForm(null)}
+        />
+      )}
     </div>
   );
 }

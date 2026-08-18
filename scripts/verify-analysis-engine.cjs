@@ -57,7 +57,8 @@ assert.deepEqual(statistics.computeDescriptiveStats([1, 2, 3, 4]), {
   median: 2.5,
   mode: 1,
 });
-assert.equal(statistics.detectScaleMax([1, 2, 4]), 4);
+assert.equal(statistics.detectScaleMax([1, 2, 4]), 5);
+assert.equal(statistics.detectScaleMax([1, 2, 6]), 7);
 assert.equal(statistics.detectScaleMax([1, 3], 5), 5);
 assert.equal(statistics.reverseCode(1, 5), 5);
 assert.equal(statistics.computeRelativeWeight(12, 4, 4), 75);
