@@ -29,7 +29,6 @@ export default function SettingsPage() {
   const [responseNotif, setResponseNotif] = useState(true);
 
   // Appearance
-  const [lang] = useState("ar");
   const [theme, setTheme] = useState("light");
 
   const tabs = [

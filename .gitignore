@@ -8,6 +8,8 @@
 
 # testing
 /coverage
+/tmp/
+/analysis-verification.pdf
 
 # next.js
 /.next/

@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:3000';
-const output = path.resolve(process.argv[3] || 'analysis-verification.pdf');
+const output = path.resolve(process.argv[3] || 'tmp/pdfs/analysis-verification.pdf');
 
 function svgDataUrl(label, color) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="72"><rect width="180" height="72" rx="8" fill="${color}"/><text x="90" y="45" text-anchor="middle" font-family="Arial" font-size="22" fill="white">${label}</text></svg>`;
@@ -96,6 +96,7 @@ const report = {
   });
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   const bytes = Buffer.from(await response.arrayBuffer());
+  fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, bytes);
   console.log(`PDF verification generated: ${output} (${bytes.length} bytes)`);
 })().catch((error) => {

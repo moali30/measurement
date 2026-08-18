@@ -1,6 +1,10 @@
 "use server";
 import { createClient } from '@/lib/supabase/server';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 /**
  * Login via Server Action
  */
@@ -26,9 +30,9 @@ export async function serverLogin(email: string, password: string) {
     }
     
     return { success: true, userId: data.user.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Login error:", error);
-    return { success: false, error: error?.message || "فشل تسجيل الدخول." };
+    return { success: false, error: getErrorMessage(error, "فشل تسجيل الدخول.") };
   }
 }
 
@@ -85,8 +89,8 @@ export async function updateNameServer(name: string) {
     }
     
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error, "تعذر تحديث الاسم.") };
   }
 }
 
@@ -96,8 +100,22 @@ export async function updateNameServer(name: string) {
 export async function changePasswordServer(newPassword: string, oldPassword?: string) {
   try {
     const supabase = await createClient();
-    // Note: Supabase doesn't require old password by default if the user is authenticated,
-    // but you might need to handle reauthentication for security in production.
+
+    if (oldPassword) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user?.email) {
+        return { success: false, error: "تعذر التحقق من المستخدم الحالي." };
+      }
+
+      const { error: reauthenticationError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: oldPassword,
+      });
+      if (reauthenticationError) {
+        return { success: false, error: "كلمة المرور الحالية غير صحيحة." };
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({
       password: newPassword
     });
@@ -107,7 +125,7 @@ export async function changePasswordServer(newPassword: string, oldPassword?: st
     }
     
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error, "تعذر تغيير كلمة المرور.") };
   }
 }

@@ -3,13 +3,19 @@ import { useEffect, useState } from 'react';
 import AnalysisPrintDocument from '@/components/pdf/AnalysisPrintDocument';
 import { ReportData } from '@/types/analysis';
 
+declare global {
+  interface Window {
+    __PRINT_DATA__?: ReportData;
+  }
+}
+
 export default function AnalysisPrintPage() {
   const [data, setData] = useState<ReportData | null>(null);
 
   useEffect(() => {
     const checkData = () => {
-      if (typeof window !== 'undefined' && (window as any).__PRINT_DATA__) {
-        setData((window as any).__PRINT_DATA__);
+      if (typeof window !== 'undefined' && window.__PRINT_DATA__) {
+        setData(window.__PRINT_DATA__);
         return true;
       }
       return false;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { serverLogin } from "@/app/actions/auth";
 
@@ -10,8 +9,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -26,7 +23,7 @@ export default function LoginPage() {
       } else {
         setError(result.error || "فشل تسجيل الدخول.");
       }
-    } catch (err: any) {
+    } catch {
       setError("خطأ في الاتصال. يرجى المحاولة مرة أخرى.");
     } finally {
       setLoading(false);

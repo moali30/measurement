@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ["@sparticuz/chromium", "playwright-core"]
+    serverComponentsExternalPackages: ["@sparticuz/chromium", "playwright-core"],
+    outputFileTracingIncludes: {
+      // The package loads these Brotli archives dynamically at runtime, so Next's
+      // static tracer cannot discover them from the JavaScript imports alone.
+      "/api/reports/analysis": [
+        "./node_modules/@sparticuz/chromium/bin/**/*",
+      ],
+    },
   },
   webpack: (config, { dev }) => {
     config.resolve.alias.canvas = false;
@@ -12,9 +19,6 @@ const nextConfig = {
       };
     }
     return config;
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 };
 

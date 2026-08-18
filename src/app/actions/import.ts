@@ -1,6 +1,20 @@
 "use server";
 import { createAdminClient } from '@/lib/supabase/server';
 
+type ImportedCell = string | number | boolean | null | undefined;
+
+type AnswerInsert = {
+  form_id: string;
+  response_id: string;
+  question_id: string;
+  number_value: number | null;
+  text_value: string;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function createFormWithQuestions(
   title: string,
   description: string,
@@ -77,15 +91,15 @@ export async function createFormWithQuestions(
     }
 
     return { success: true, formId: newFormId, questionIdMap };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error, 'Failed to create form') };
   }
 }
 
 export async function importBatchResponses(
   formId: string,
   headers: string[],
-  dataRows: any[][],
+  dataRows: ImportedCell[][],
   questionIdMap: Record<string, string>,
   startDateIso: string,
   maxDays: number
@@ -120,7 +134,7 @@ export async function importBatchResponses(
     }
 
     // Prepare answers
-    const answersToInsert: any[] = [];
+    const answersToInsert: AnswerInsert[] = [];
     
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -153,19 +167,18 @@ export async function importBatchResponses(
     }
 
     return { success: true, count: dataRows.length };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error, 'Failed to import responses') };
   }
 }
 
 export async function bulkImportAnswers(
   formId: string,
   headers: string[],
-  dataRows: any[][],
+  dataRows: ImportedCell[][],
   questionIdMap: Record<string, string>,
   startDateIso: string,
-  maxDays: number,
-  jwt?: string
+  maxDays: number
 ) {
   return importBatchResponses(formId, headers, dataRows, questionIdMap, startDateIso, maxDays);
 }
@@ -193,15 +206,15 @@ export async function bulkAddAnswers(
     }
     
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error, 'Failed to add answers') };
   }
 }
 
 export async function importSingleResponse(
   formId: string,
   headers: string[],
-  rowData: any[],
+  rowData: ImportedCell[],
   questionIdMap: Record<string, string>,
   submitDateIso: string
 ) {

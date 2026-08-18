@@ -42,6 +42,12 @@ nobody touched them". Change margins in `config.ts` only.
 `chromium.executablePath()` is called **with no argument** — the extracted binary always matches
 the installed package version and cannot drift.
 
+The package is externalized in `next.config.mjs`, and `outputFileTracingIncludes` explicitly adds
+its four runtime archives under `bin/` to the `/api/reports/analysis` serverless function. Next's
+static tracer cannot infer those files because Sparticuz resolves them dynamically at runtime.
+After changing Next, Chromium, Playwright, or the PDF route, run `npm run verify:deploy`; the trace
+verification fails if any required archive would be missing from the Vercel function.
+
 Set `CHROMIUM_PACK_URL` to fetch a remote pack tarball instead, only if the deployment bundle
 size becomes a problem. Do not hardcode a version URL in the source; that is exactly what caused
 the previous v131-vs-v149 mismatch.
@@ -88,9 +94,10 @@ Run:
 ```text
 npx playwright install chromium
 npm run build
+npm run verify:chromium-trace
 npm start
 npm run verify:pdf
 ```
 
-The verification script writes `analysis-verification.pdf` for visual QA. Move it under `tmp/pdfs/`
-when retaining rendered pages or contact sheets.
+The verification script writes `tmp/pdfs/analysis-verification.pdf` for visual QA. Keep rendered
+pages and contact sheets under the same ignored directory.
