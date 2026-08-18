@@ -7,8 +7,13 @@
 
 import { ANALYSIS_SCALE } from './scale';
 
-/** السلالم الشائعة التي نقرّب إليها عند اكتشاف السُّلَّم تلقائياً */
-const STANDARD_SCALES = [3, 4, 5, 7, 10] as const;
+/**
+ * السلالم الشائعة التي نقرّب إليها عند اكتشاف السُّلَّم تلقائياً.
+ *
+ * تبدأ من السُّلَّم الافتراضي ولا تنزل تحته: عدم اختيار أحد لأعلى تقدير ليس
+ * دليلاً على أن السُّلَّم أقصر، والنزول يضخّم الوزن النسبي بصمت.
+ */
+const STANDARD_SCALES = [5, 7, 10] as const;
 
 export interface DistributionSlice {
   /** قيمة الاستجابة (1، 2، 3 …) */
@@ -40,16 +45,23 @@ export interface CronbachAlphaResult {
 /**
  * يكتشف أقصى قيمة في سُلَّم القياس.
  *
- * عند غياب توصيف السؤال نختار أصغر سُلَّم شائع يستوعب أعلى قيمة مرصودة. هذه
- * أفضل قرينة متاحة لملفات Excel الخام، مع بقاء التثبيت اليدوي هو المرجع الأدق
- * إذا كانت العينة لم تستخدم الطرف الأعلى من السُّلَّم.
+ * محافظ عن قصد: ما دامت أعلى قيمة مرصودة ضمن السُّلَّم الافتراضي نُبقيه، ولا
+ * نستنتج سُلَّماً أقصر أبداً. الاستنتاج لأسفل كان ينتج أرقاماً خاطئة صامتة —
+ * سؤال أجاب عنه الجميع بـ«محايد» (3 من 5) كان يُحسب على سُلَّم من 3 فيظهر
+ * بوزن نسبي 100%. نرفع السُّلَّم فقط حين تتجاوزه البيانات فعلاً.
+ *
+ * السُّلَّم الأقصر (رباعي أو ثلاثي) يُضبط يدوياً من واجهة التحليل، ويُعلَن في
+ * صفحة منهجية التقرير.
  */
 export function detectScaleMax(values: number[], override?: number): number {
-  if (override && override > 0) return override;
+  if (override && override > 1) return override;
   if (values.length === 0) return ANALYSIS_SCALE.max;
 
-  const observedMax = Math.max(...values);
-  if (observedMax <= 1) return ANALYSIS_SCALE.max;
+  // reduce بدل Math.max(...values) لأن النشر على آلاف القيم يخاطر بتجاوز المكدس
+  const observedMax = values.reduce((max, value) => (value > max ? value : max), -Infinity);
+  if (!Number.isFinite(observedMax) || observedMax <= ANALYSIS_SCALE.max) {
+    return ANALYSIS_SCALE.max;
+  }
 
   return STANDARD_SCALES.find((scale) => observedMax <= scale) ?? Math.ceil(observedMax);
 }

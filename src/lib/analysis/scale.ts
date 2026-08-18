@@ -13,14 +13,6 @@ export const ANALYSIS_SCALE = {
   label: 'مقياس ليكرت الخماسي',
 } as const;
 
-/**
- * أرضية المقياس: أسوأ إجابة ممكنة لا تعطي صفراً بل هذه النسبة.
- * تُعرض صراحةً في صفحة المنهجية حتى لا يُقرأ الرقم على أنه من صفر إلى مئة.
- */
-export const SCALE_FLOOR_PERCENT = Math.round(
-  (ANALYSIS_SCALE.min / ANALYSIS_SCALE.max) * 100
-);
-
 export interface Grade {
   label: string;
   /** لون النص — مضبوط ليقرأ على خلفية بيضاء في الطباعة */

@@ -5,6 +5,8 @@ import '@/styles/print.css';
 import React, { useEffect, useState } from 'react';
 import { ReportData } from '@/types/analysis';
 import {
+  Area,
+  AreaChart,
   BarChart,
   Bar,
   XAxis,
@@ -14,7 +16,6 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { PrintFooter } from './shared/PrintFooter';
 import {
   ANALYSIS_SCALE,
   DISTRIBUTION_BANDS,
@@ -28,6 +29,7 @@ import {
   getAxesChartData,
   getBottom5ChartData,
   getRespondentCount,
+  getResponseHistogramData,
   getTop10ChartData,
   getWeightDistributionPieData,
 } from '@/lib/pdf/report-helpers';
@@ -40,6 +42,45 @@ interface AnalysisPrintDocumentProps {
 /** لون شريط الأداء يتبع نفس عتبات درجة التقييم */
 function barColor(average: number): string {
   return gradeFor(average).color;
+}
+
+const RADIAN = Math.PI / 180;
+
+interface DonutLabelProps {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  percent: number;
+}
+
+/**
+ * نسبة مكتوبة داخل كل قطاع. الحلقة بلا أرقام كانت تُقرأ كزينة لا كبيانات،
+ * وخطوط الإيضاح الخارجية تتداخل وتُقصّ عند حد الصفحة في الطباعة.
+ */
+function renderDonutLabel(props: unknown) {
+  const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props as DonutLabelProps;
+  const share = Math.round((percent ?? 0) * 100);
+  if (!share) return null;
+
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={12}
+      fontWeight={700}
+    >
+      {share}%
+    </text>
+  );
 }
 
 function reliabilityLabel(alpha: number): string {
@@ -106,6 +147,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
     { length: scaleMax - ANALYSIS_SCALE.min + 1 },
     (_, i) => scaleMax - i
   );
+  const histogramData = getResponseHistogramData(data.results, scaleMax);
 
   // الفهرس يتبع الأقسام الفعلية — قسم غائب لا يظهر في الفهرس
   const tocEntries: { title: string; note: string }[] = [
@@ -198,7 +240,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       </section>
 
       {/* ===== الملخص التنفيذي ===== */}
-      <section className="print-section print-section--page">
+      <section className="print-section">
         <h2 className="print-section-title">الملخص التنفيذي</h2>
 
         <div className="print-kpi-grid">
@@ -262,7 +304,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       </section>
 
       {/* ===== منهجية التحليل ===== */}
-      <section className="print-section print-section--flow print-section--page">
+      <section className="print-section print-section--flow">
         <h2 className="print-section-title">منهجية التحليل</h2>
 
         <ul className="print-method-list">
@@ -378,7 +420,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
       {/* ===== أسئلة نعم/لا ===== */}
       {hasBinary && (
-        <section className="print-section print-section--flow print-section--page">
+        <section className="print-section print-section--flow">
           <h2 className="print-section-title">أسئلة الإجابة الثنائية (نعم / لا)</h2>
           <p style={{ fontSize: '10pt', marginBottom: '4mm' }}>
             هذه الأسئلة معروضة منفصلةً ولا تدخل في حساب المتوسط العام، لأن مداها لا يطابق مدى
@@ -456,7 +498,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
       {/* ===== جدول المحاور ===== */}
       {hasAxes && (
-        <section className="print-section print-section--flow print-section--page">
+        <section className="print-section print-section--flow">
           <h2 className="print-section-title">نتائج تحليل المحاور</h2>
           <table className="print-table">
             <thead>
@@ -499,7 +541,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       {/* ===== مقارنة المحاور =====
           --flow لأن عدد أشرطة الأداء يساوي عدد المحاور وقد يتجاوز الصفحة */}
       {hasAxes && (
-        <section className="print-section print-section--flow print-section--page">
+        <section className="print-section print-section--flow">
           <h2 className="print-section-title">مقارنة بين المحاور</h2>
 
           <div className="print-chart-block">
@@ -578,41 +620,84 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           </div>
         )}
 
+        {histogramData.length > 0 && (
+          <div className="print-chart-block">
+            <h3>المدرج التكراري للاستجابات</h3>
+            <p className="print-chart-note">
+              إجمالي الاستجابات عند كل مستوى من مستويات السُّلَّم، عبر جميع الأسئلة.
+            </p>
+            <div className="print-chart-wrap">
+              <AreaChart width={650} height={240} data={histogramData} margin={{ top: 16, right: 16, bottom: 8, left: 8 }}>
+                <defs>
+                  <linearGradient id="histogramFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3949ab" stopOpacity={0.75} />
+                    <stop offset="100%" stopColor="#3949ab" stopOpacity={0.08} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e3f2" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#1a237e"
+                  strokeWidth={2}
+                  fill="url(#histogramFill)"
+                  isAnimationActive={false}
+                  label={{ position: 'top', fontSize: 10, fill: '#1a237e' }}
+                  dot={{ r: 3, fill: '#1a237e' }}
+                />
+              </AreaChart>
+            </div>
+          </div>
+        )}
+
         {distribution.length > 0 && (
           <div className="print-chart-block">
-            <h3>توزيع الأوزان النسبية للأسئلة</h3>
-            <div className="print-chart-wrap">
-              <PieChart width={420} height={240}>
+            <h3>توزيع الأسئلة على مستويات الأداء</h3>
+            {/* الرسم ووسيلة الإيضاح جنباً إلى جنب: الحلقة وحدها كانت تترك نصف
+                عرض الصفحة فارغاً، والنسب لم تكن مكتوبة عليها إطلاقاً. */}
+            <div className="print-donut">
+              <PieChart width={260} height={230}>
                 <Pie
                   data={distribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={85}
-                  paddingAngle={3}
+                  cx={125}
+                  cy={112}
+                  innerRadius={52}
+                  outerRadius={98}
+                  paddingAngle={distribution.length > 1 ? 2 : 0}
                   dataKey="value"
+                  startAngle={90}
+                  endAngle={-270}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  labelLine={false}
+                  label={renderDonutLabel}
                   isAnimationActive={false}
                 >
                   {distribution.map((entry) => (
                     <Cell key={entry.name} fill={entry.fill} />
                   ))}
                 </Pie>
+                <text x={125} y={104} textAnchor="middle" fontSize={20} fontWeight={700} fill="#1a237e">
+                  {data.results.length}
+                </text>
+                <text x={125} y={122} textAnchor="middle" fontSize={10} fill="#666666">
+                  سؤالاً
+                </text>
               </PieChart>
-            </div>
 
-            {/* وسيلة إيضاح مكتوبة بالعدد والنسبة بدل <Legend/> الافتراضي */}
-            <div className="print-legend">
-              {distribution.map((bucket) => (
-                <div key={bucket.name} className="print-legend__item">
-                  <span className="print-legend__swatch" style={{ background: bucket.fill }} />
-                  <span>
-                    {bucket.name}:{' '}
-                    <span className="print-legend__count">
-                      {bucket.value} ({bucket.percentage}%)
+              <ul className="print-donut__legend">
+                {distribution.map((bucket) => (
+                  <li key={bucket.name}>
+                    <span className="print-legend__swatch" style={{ background: bucket.fill }} />
+                    <span className="print-donut__label">{bucket.name}</span>
+                    <span className="print-donut__value">
+                      {bucket.value} سؤال · {bucket.percentage}%
                     </span>
-                  </span>
-                </div>
-              ))}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}
@@ -620,7 +705,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
       {/* ===== مقارنة بين الفئات ===== */}
       {comparison && (
-        <section className="print-section print-section--flow print-section--page">
+        <section className="print-section print-section--flow">
           <h2 className="print-section-title">مقارنة بين الفئات</h2>
           <p style={{ fontSize: '10pt', marginBottom: '4mm' }}>
             مقارنة متوسطات المحاور بين فئات{' '}
@@ -664,7 +749,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       )}
 
       {/* ===== التحليل النهائي ===== */}
-      <section className="print-section print-section--flow print-section--page">
+      <section className="print-section print-section--flow">
         <h2 className="print-section-title">التحليل النهائي والاستنتاجات</h2>
 
         <div className="print-narrative">
@@ -729,11 +814,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           ))}
         </section>
       )}
-
-      {/* ===== اعتماد التقرير ===== */}
-      <div style={{ breakInside: 'avoid', pageBreakInside: 'avoid', marginTop: '10mm' }}>
-        <PrintFooter signatures={data.signatures} />
-      </div>
     </div>
   );
 }

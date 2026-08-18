@@ -11,7 +11,9 @@ function safeBaseName(title: string): string {
 
 function addSheet(workbook: XLSX.WorkBook, name: string, rows: Record<string, unknown>[]) {
   const sheet = XLSX.utils.json_to_sheet(rows);
-  sheet['!views'] = [{ rightToLeft: true }];
+  // SheetJS يسمّي الخاصية RTL؛ اسم مثل rightToLeft يُتجاهل بصمت فتخرج الأوراق
+  // بترتيب أعمدة من اليسار لليمين رغم أن كل المحتوى عربي.
+  sheet['!views'] = [{ RTL: true }];
   XLSX.utils.book_append_sheet(workbook, sheet, name.slice(0, 31));
 }
 

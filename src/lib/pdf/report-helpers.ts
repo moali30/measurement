@@ -68,6 +68,34 @@ export function getWeightDistributionPieData(results: QuestionResult[]): Distrib
   return getWeightDistribution(results).filter((item) => item.value > 0);
 }
 
+/**
+ * المدرج التكراري العام: كم استجابة وقعت على كل مستوى من السُّلَّم عبر كل
+ * الأسئلة مجتمعة. يوضح ميل العينة ككل (متفائلة / محايدة / ناقدة) وهو ما لا
+ * يظهره متوسط كل سؤال على حدة.
+ */
+export function getResponseHistogramData(results: QuestionResult[], scaleMax: number) {
+  const totals = new Map<number, number>();
+  for (let level = 1; level <= scaleMax; level += 1) totals.set(level, 0);
+
+  results.forEach((item) => {
+    item.distribution.forEach((slice) => {
+      if (totals.has(slice.value)) {
+        totals.set(slice.value, (totals.get(slice.value) ?? 0) + slice.count);
+      }
+    });
+  });
+
+  const grandTotal = Array.from(totals.values()).reduce((a, b) => a + b, 0);
+
+  return Array.from(totals.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([level, count]) => ({
+      name: String(level),
+      count,
+      percentage: grandTotal > 0 ? Math.round((count / grandTotal) * 100) : 0,
+    }));
+}
+
 /** أدنى الأسئلة تقييماً — تصاعدياً حتى يقرأ الرسم من الأسوأ */
 export function getBottom5ChartData(resultsForAnalysis: QuestionResult[]) {
   return resultsForAnalysis

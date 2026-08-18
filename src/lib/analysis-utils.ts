@@ -259,12 +259,23 @@ function computeCore(
 
   const reversed = new Set(options.reversedQuestions ?? []);
   const scaleByQuestion: Record<string, number> = {};
+
+  // السُّلَّم المُستنتَج يُحسب من كل الأسئلة مجتمعةً، لا من كل سؤال على حدة.
+  // الاستنتاج لكل سؤال منفرداً كان يعطي كل سؤال مقاماً مختلفاً حسب أعلى إجابة
+  // وصلته، فتصبح الأسئلة غير قابلة للمقارنة والترتيب والمتوسط العام بلا معنى.
+  // الأسئلة الثنائية مستبعدة من الاستنتاج لأن مداها ليس مدى السُّلَّم.
+  const pooledValues = columns
+    .filter((column) => column.binaryHits !== column.values.length)
+    .reduce<number[]>((all, column) => all.concat(column.values), []);
+  const inferredScale = detectScaleMax(pooledValues, options.scaleMaxOverride);
+
   const scoredColumns: ScoredColumn[] = columns.map((column) => {
+    // توصيف السؤال المخزَّن في النموذج هو المرجع الأدق؛ الاستنتاج آخر ملاذ
     const configuredScale =
       options.scaleMaxOverride ??
       forcedScaleByQuestion?.[column.question] ??
       options.questionScaleMax?.[column.question];
-    const scaleMax = detectScaleMax(column.values, configuredScale);
+    const scaleMax = configuredScale && configuredScale > 1 ? configuredScale : inferredScale;
     const isReversed = reversed.has(column.question);
     scaleByQuestion[column.question] = scaleMax;
 

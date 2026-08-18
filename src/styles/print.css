@@ -277,44 +277,6 @@
   margin-top: 1mm;
 }
 
-.print-footer {
-  margin-top: 8mm;
-  padding-top: 4mm;
-  border-top: 2px solid #1a237e;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 8px;
-  font-size: 10pt;
-  font-weight: 700;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-.print-footer__committee {
-  flex: 1;
-  text-align: center;
-  color: #1a237e;
-}
-
-.print-footer__signatures {
-  flex: 2;
-  display: flex;
-  justify-content: space-around;
-  gap: 6mm;
-}
-
-.print-footer__signature {
-  text-align: center;
-}
-
-.print-footer__signature img {
-  max-height: 16mm;
-  margin: 0 auto;
-  display: block;
-  mix-blend-mode: multiply;
-}
-
 .print-table {
   width: 100%;
   border-collapse: collapse;
@@ -439,6 +401,68 @@
   direction: ltr;
 }
 
+/* شرح مختصر تحت عنوان الرسم */
+.print-chart-note {
+  text-align: center;
+  font-size: 9pt;
+  color: #666666;
+  margin: -2mm 0 3mm;
+}
+
+/* ===== الحلقة ووسيلة إيضاحها جنباً إلى جنب ===== */
+
+.print-donut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8mm;
+  flex-wrap: wrap;
+  direction: rtl;
+}
+
+.print-donut > .recharts-wrapper {
+  direction: ltr;
+  flex: 0 0 auto;
+}
+
+.print-donut__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 70mm;
+  min-width: 60mm;
+  max-width: 90mm;
+}
+
+.print-donut__legend li {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  padding: 2.5mm 3mm;
+  border: 1px solid #e0e3f2;
+  border-radius: 5px;
+  margin-bottom: 2mm;
+  background: #fafbff;
+  font-size: 10pt;
+}
+
+.print-donut__legend li:last-child {
+  margin-bottom: 0;
+}
+
+.print-donut__label {
+  flex: 1;
+  font-weight: 700;
+  color: #1a237e;
+}
+
+.print-donut__value {
+  white-space: nowrap;
+  font-weight: 700;
+  color: #333333;
+  direction: rtl;
+}
+
 /* ===== وسيلة إيضاح مخصصة (بديل <Legend/> الافتراضي) ===== */
 
 .print-legend {
@@ -543,32 +567,43 @@
   background: #fafafa;
 }
 
+/* المجموعة تتدفق عبر الصفحات — منع الكسر كان يقفز بمجموعة طويلة إلى صفحة
+   جديدة ويترك ما قبلها شبه فارغ */
 .print-comment-group {
-  break-inside: avoid;
-  page-break-inside: avoid;
-  margin-bottom: 6mm;
-  padding: 5mm;
-  border: 1px solid #1a237e;
-  border-radius: 6px;
+  break-inside: auto;
+  page-break-inside: auto;
+  margin-bottom: 5mm;
 }
 
 .print-comment-group h4 {
-  margin: 0 0 3mm;
+  margin: 0 0 1mm;
   color: #1a237e;
-  font-size: 12pt;
-  border-bottom: 2px solid #1a237e;
-  padding-bottom: 2mm;
-  display: inline-block;
+  font-size: 11.5pt;
+  border-right: 3px solid #1a237e;
+  padding: 0 3mm 0 0;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
+/* عمودان: التعليقات نصوص قصيرة، والعمود الواحد يهدر نصف عرض الصفحة */
 .print-comment-group ul {
   margin: 0;
-  padding-right: 5mm;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 6mm;
 }
 
 .print-comment-group li {
-  margin-bottom: 2mm;
-  line-height: 1.6;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 2mm;
+  padding: 2mm 3mm;
+  background: #fafbff;
+  border: 1px solid #e0e3f2;
+  border-radius: 4px;
+  font-size: 9.5pt;
+  line-height: 1.55;
 }
 
 /* حصيلة التنظيف: كم تعليقاً ذا معنى بقي من إجمالي الاستجابات */
