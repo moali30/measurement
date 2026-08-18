@@ -26,7 +26,6 @@ import {
   cleanAutoCommentHtml,
   formatReportDate,
   getAxisExtremes,
-  getAxesChartData,
   getBottom5ChartData,
   getRespondentCount,
   getResponseHistogramData,
@@ -124,7 +123,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
   const top10Data = getTop10ChartData(data.resultsForAnalysis);
   const bottom5Data = getBottom5ChartData(data.resultsForAnalysis);
   const distribution = getWeightDistributionPieData(data.results);
-  const axesChartData = getAxesChartData(data.axes);
   const { best: bestAxis, worst: worstAxis } = getAxisExtremes(data.axes);
 
   const hasAxes = data.axes.length > 0;
@@ -133,7 +131,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
   const comparison = data.comparison;
   const overallGrade = gradeFor(data.overallAverage);
 
-  // أعمدة التوزيع التكراري — من الأعلى للأدنى كما يُقرأ في التقارير الأكاديمية
   const scaleMax = data.scaleMax ?? ANALYSIS_SCALE.max;
   const usedScales = Array.from(new Set(data.results.map((item) => item.scaleMax))).sort((a, b) => a - b);
   const scaleDescription =
@@ -143,10 +140,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
   const floorDescription = usedScales
     .map((maximum) => `${Math.round((ANALYSIS_SCALE.min / maximum) * 100)}% للسُلَّم ${maximum}`)
     .join('، ');
-  const distributionLevels = Array.from(
-    { length: scaleMax - ANALYSIS_SCALE.min + 1 },
-    (_, i) => scaleMax - i
-  );
   const histogramData = getResponseHistogramData(data.results, scaleMax);
 
   // الفهرس يتبع الأقسام الفعلية — قسم غائب لا يظهر في الفهرس
@@ -157,7 +150,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
     ...(hasBinary
       ? [{ title: 'أسئلة الإجابة الثنائية', note: 'أسئلة نعم/لا خارج المتوسط العام' }]
       : []),
-    { title: 'التوزيع التكراري للاستجابات', note: 'عدد ونسبة كل مستوى إجابة' },
     ...(hasAxes
       ? [
           { title: 'نتائج تحليل المحاور', note: 'متوسط كل محور وترتيبه' },
@@ -455,47 +447,6 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
         </section>
       )}
 
-      {/* ===== التوزيع التكراري ===== */}
-      <section className="print-section print-section--flow print-section--page">
-        <h2 className="print-section-title">التوزيع التكراري للاستجابات</h2>
-        <p style={{ fontSize: '10pt', marginBottom: '4mm' }}>
-          عدد المشاركين الذين اختاروا كل مستوى استجابة، والنسبة بين قوسين.
-        </p>
-        <table className="print-table print-table--compact">
-          <thead>
-            <tr>
-              <th style={{ width: '5%' }}>م</th>
-              <th style={{ width: '34%' }}>السؤال</th>
-              {distributionLevels.map((level) => (
-                <th key={level}>{level}</th>
-              ))}
-              <th>لم يجب</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.results.map((item) => (
-              <tr key={item.questionNumber}>
-                <td className="num">{item.questionNumber}</td>
-                <td>{item.question}</td>
-                {distributionLevels.map((level) => {
-                  if (level > item.scaleMax) return <td key={level} className="num">—</td>;
-                  const slice = item.distribution.find((s) => s.value === level);
-                  return (
-                    <td key={level} className="num">
-                      {slice?.count ?? 0}
-                      <span style={{ display: 'block', fontSize: '7.5pt', color: '#777' }}>
-                        ({slice?.percentage ?? 0}%)
-                      </span>
-                    </td>
-                  );
-                })}
-                <td className="num">{item.missing}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
       {/* ===== جدول المحاور ===== */}
       {hasAxes && (
         <section className="print-section print-section--flow">
@@ -544,24 +495,10 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
         <section className="print-section print-section--flow">
           <h2 className="print-section-title">مقارنة بين المحاور</h2>
 
-          <div className="print-chart-block">
-            <div className="print-chart-wrap">
-              <BarChart width={650} height={320} data={axesChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="name"
-                  interval={0}
-                  angle={-35}
-                  textAnchor="end"
-                  height={90}
-                  tick={{ fontSize: 10, fill: '#1a237e' }}
-                />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-                <Bar dataKey="average" fill="#3949ab" isAnimationActive={false} />
-              </BarChart>
-            </div>
-          </div>
-
+          {/* أُزيل هنا رسم أعمدة رأسي بأسماء محاور مائلة: أسماء المحاور العربية
+              أطول من ارتفاع محور السينات المتاح، فكانت تفيض خارج حدود الـ SVG
+              وتُرسم فوق تذييل الصفحة وتُقصّ. الأشرطة الأفقية أدناه تعرض نفس
+              البيانات وتستوعب الاسم الكامل بلا ميل ولا قصّ. */}
           <div className="print-axis-bars">
             {data.axes.map((axis) => {
               const average = axis.average || 0;

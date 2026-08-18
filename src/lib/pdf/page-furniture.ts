@@ -84,19 +84,33 @@ export function buildHeaderTemplate(data: ReportData): string {
  * التذييل: جهة الإعداد يميناً، ورقم الصفحة من الإجمالي وسطاً.
  * `pageNumber` و`totalPages` صنفان خاصان يملؤهما Chromium.
  */
+/**
+ * خانة التوقيع: اللقب أولاً ثم صورة التوقيع تحته — الترتيب المعتاد في
+ * المستندات الرسمية، فالقارئ يعرف صاحب التوقيع قبل أن يراه.
+ */
 function signatureCells(data: ReportData): string {
   const signatures = (data.signatures ?? []).slice(0, 2);
+
   if (signatures.length === 0) {
-    return '<div style="font-size:7pt;color:#555;min-width:34mm;text-align:center;">التوقيع المعتمد: __________________</div>';
+    return `
+      <div style="text-align:center;min-width:34mm;">
+        <div style="font-size:7pt;color:#1a237e;font-weight:700;margin-bottom:0.8mm;">التوقيع المعتمد</div>
+        <div style="border-bottom:1px solid #999;width:32mm;height:5mm;margin:0 auto;"></div>
+      </div>`;
   }
 
   return signatures
     .map((signature) => {
       const name = escapeHtml(signature.name || 'التوقيع المعتمد');
       const image = signature.url?.startsWith('data:')
-        ? `<img src="${signature.url}" style="display:block;max-width:28mm;max-height:7mm;object-fit:contain;margin:0 auto 0.5mm;" />`
-        : '';
-      return `<div style="font-size:7pt;color:#555;min-width:28mm;text-align:center;">${image}${name}</div>`;
+        ? `<img src="${signature.url}" style="display:block;max-width:28mm;max-height:8mm;object-fit:contain;margin:0 auto;" />`
+        : '<div style="border-bottom:1px solid #999;width:26mm;height:5mm;margin:0 auto;"></div>';
+
+      return `
+        <div style="text-align:center;min-width:28mm;">
+          <div style="font-size:7pt;color:#1a237e;font-weight:700;margin-bottom:0.8mm;">${name}</div>
+          ${image}
+        </div>`;
     })
     .join('');
 }
@@ -115,17 +129,14 @@ export function buildFooterTemplate(data: ReportData): string {
     ">
       <div style="
         display:flex;
-        align-items:center;
+        align-items:flex-end;
         justify-content:space-between;
         gap:4mm;
         border-top:1px solid #c5cae9;
         padding-top:2mm;
       ">
-        <div style="font-size:8pt;font-weight:700;color:#1a237e;">
+        <div style="font-size:8pt;font-weight:700;color:#1a237e;white-space:nowrap;">
           إعداد لجنة القياس والتقويم
-        </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:4mm;flex:1;">
-          ${signatureCells(data)}
         </div>
         <div style="
           background-color:#e8eaf6;
@@ -135,11 +146,16 @@ export function buildFooterTemplate(data: ReportData): string {
           padding:1mm 4mm;
           border-radius:10px;
           border:1px solid #c5cae9;
+          white-space:nowrap;
         ">
           <span>صفحة</span>
           <span style="direction:ltr;unicode-bidi:embed;display:inline-block;">
             <span class="pageNumber"></span> / <span class="totalPages"></span>
           </span>
+        </div>
+        <!-- التوقيع أقصى الشمال: آخر عنصر في تدفّق RTL -->
+        <div style="display:flex;align-items:flex-end;justify-content:flex-end;gap:4mm;">
+          ${signatureCells(data)}
         </div>
       </div>
     </div>
