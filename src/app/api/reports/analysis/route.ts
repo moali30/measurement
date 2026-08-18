@@ -5,7 +5,15 @@ import { validateReportData } from '@/lib/pdf/report-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+
+/**
+ * خطة Vercel المجانية تحدّ الدوال عند ٦٠ ثانية وتتجاهل أي رقم أعلى،
+ * فإعلان ١٢٠ كان يعطي إحساساً زائفاً بالأمان أثناء الإقلاع البارد لـ Chromium.
+ *
+ * ملاحظة: Next.js يقرأ إعدادات مقطع المسار وقت البناء، فلا بد أن تكون قيمة
+ * حرفية — لا متغير بيئة ولا تعبير محسوب. على خطة Pro غيّر الرقم إلى 300 يدوياً.
+ */
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -31,7 +39,27 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('[PDF generation error]', error);
-    const message = error instanceof Error ? error.message : 'فشل إنشاء ملف PDF';
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    const raw = error instanceof Error ? error.message : '';
+
+    // رسائل Playwright الخام غير مفهومة للمستخدم — نترجم أشهر حالتي فشل
+    if (/timeout/i.test(raw)) {
+      return NextResponse.json(
+        {
+          error:
+            'انتهت مهلة إنشاء التقرير. جرّب تقليل عدد الأسئلة أو حجم الشعارات، أو أعد المحاولة بعد لحظات.',
+        },
+        { status: 504 }
+      );
+    }
+
+    if (/executablePath|browserType\.launch|ENOENT/i.test(raw)) {
+      return NextResponse.json(
+        { error: 'تعذّر تشغيل محرك الطباعة على الخادم. راجع سجلات الخادم لتفاصيل Chromium.' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ error: raw || 'فشل إنشاء ملف PDF' }, { status: 500 });
   }
 }

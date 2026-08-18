@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:analysis": "node scripts/verify-analysis-engine.cjs",
+    "verify:pdf": "node scripts/verify-analysis-pdf.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

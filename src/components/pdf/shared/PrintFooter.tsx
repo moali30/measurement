@@ -23,7 +23,7 @@ export function PrintFooter({ signatures = [] }: PrintFooterProps) {
           signatures.map((sig) => (
             <div key={sig.name + sig.url} className="print-footer__signature">
               <p style={{ margin: '0 0 2mm' }}>{sig.name}</p>
-              <img src={sig.url} alt={sig.name} />
+              {sig.url ? <img src={sig.url} alt={sig.name} /> : null}
             </div>
           ))
         ) : (

@@ -3,6 +3,8 @@
 import React from 'react';
 import { ReportData } from '@/types/analysis';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { getWeightDistributionPieData } from '@/lib/pdf/report-helpers';
+import { gradeFor } from '@/lib/analysis/scale';
 
 interface AnalysisReportProps {
   data: ReportData;
@@ -18,17 +20,9 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
     weight: item.relativeWeight
   }));
 
-  const dist = {
-    high: data.results.filter(item => item.relativeWeight >= 80).length,
-    medium: data.results.filter(item => item.relativeWeight >= 60 && item.relativeWeight < 80).length,
-    low: data.results.filter(item => item.relativeWeight < 60).length,
-  };
-
-  const pieData = [
-    { name: 'مرتفع (>=80%)', value: dist.high, fill: '#4caf50' },
-    { name: 'متوسط (60-80%)', value: dist.medium, fill: '#ffc107' },
-    { name: 'منخفض (<60%)', value: dist.low, fill: '#f44336' },
-  ].filter(item => item.value > 0);
+  // نفس مصدر التصنيف المستخدم في التقرير المطبوع، حتى لا تنحرف العتبات بين
+  // ما يراه المستخدم على الشاشة وما يخرج في الـ PDF
+  const pieData = getWeightDistributionPieData(data.results);
 
   const axesChartData = data.axes.map(axis => ({
     name: axis.name,
@@ -47,24 +41,38 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
               <th className="p-3 border border-gray-200 dark:border-gray-700 w-1/2">السؤال</th>
               <th className="p-3 border border-gray-200 dark:border-gray-700">العدد</th>
               <th className="p-3 border border-gray-200 dark:border-gray-700">المتوسط</th>
+              <th className="p-3 border border-gray-200 dark:border-gray-700">الانحراف</th>
               <th className="p-3 border border-gray-200 dark:border-gray-700">الوزن النسبي (%)</th>
+              <th className="p-3 border border-gray-200 dark:border-gray-700">الدرجة</th>
               <th className="p-3 border border-gray-200 dark:border-gray-700">الترتيب</th>
             </tr>
           </thead>
           <tbody>
-            {data.results.map((item) => (
-              <tr key={item.questionNumber} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td className="p-3 border border-gray-200 dark:border-gray-700">{item.questionNumber}</td>
-                <td className="p-3 border border-gray-200 dark:border-gray-700">{item.question}</td>
-                <td className="p-3 border border-gray-200 dark:border-gray-700">{item.count}</td>
-                <td className="p-3 border border-gray-200 dark:border-gray-700">{item.mean}</td>
-                <td className="p-3 border border-gray-200 dark:border-gray-700">{item.relativeWeight}%</td>
-                <td className="p-3 border border-gray-200 dark:border-gray-700">{item.rank}</td>
-              </tr>
-            ))}
+            {data.results.map((item) => {
+              const grade = gradeFor(item.relativeWeight);
+              return (
+                <tr key={item.questionNumber} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.questionNumber}</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.question}</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.count}</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.mean}</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.stdDev}</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.relativeWeight}%</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700 font-bold text-center whitespace-nowrap" style={{ color: grade.color }}>
+                    {grade.label}
+                  </td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{item.rank}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        <div className="mt-4 font-bold text-gray-800 dark:text-gray-200">المتوسط العام: {data.overallAverage}%</div>
+        <div className="mt-4 font-bold text-gray-800 dark:text-gray-200">
+          المتوسط العام: {data.overallAverage}%
+          {data.overallCronbachAlpha !== undefined && (
+            <span className="mr-6">ألفا كرونباخ: {data.overallCronbachAlpha}</span>
+          )}
+        </div>
       </div>
 
       {/* Axes Table */}
@@ -78,6 +86,7 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
                 <th className="p-3 border border-gray-200 dark:border-gray-700">نطاق الأسئلة</th>
                 <th className="p-3 border border-gray-200 dark:border-gray-700">عدد الأسئلة</th>
                 <th className="p-3 border border-gray-200 dark:border-gray-700">المتوسط (%)</th>
+                <th className="p-3 border border-gray-200 dark:border-gray-700">ألفا كرونباخ</th>
                 <th className="p-3 border border-gray-200 dark:border-gray-700">الترتيب</th>
               </tr>
             </thead>
@@ -88,6 +97,7 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
                   <td className="p-3 border border-gray-200 dark:border-gray-700">من {axis.start} إلى {axis.end}</td>
                   <td className="p-3 border border-gray-200 dark:border-gray-700">{axis.count}</td>
                   <td className="p-3 border border-gray-200 dark:border-gray-700">{axis.average}%</td>
+                  <td className="p-3 border border-gray-200 dark:border-gray-700">{axis.cronbachAlpha ?? '—'}</td>
                   <td className="p-3 border border-gray-200 dark:border-gray-700">{axis.rank}</td>
                 </tr>
               ))}
@@ -180,10 +190,21 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
           <div className="space-y-6">
             {data.comments.map((commentGroup, idx) => (
               <div key={idx} className="border-b border-gray-100 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
-                <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-3">{commentGroup.question}</h4>
+                <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">{commentGroup.question}</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  {commentGroup.answers.length} تعليقاً من إجمالي {commentGroup.totalResponses} استجابة
+                  {commentGroup.skippedCount > 0 && ` — استُبعد ${commentGroup.skippedCount} بلا محتوى`}
+                </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-400">
                   {commentGroup.answers.map((answer, aIdx) => (
-                    <li key={aIdx} className="bg-gray-50 dark:bg-gray-900 p-2 rounded-md">{answer}</li>
+                    <li key={aIdx} className="bg-gray-50 dark:bg-gray-900 p-2 rounded-md">
+                      {answer.text}
+                      {answer.occurrences > 1 && (
+                        <span className="mr-2 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                          (تكرر {answer.occurrences} مرات)
+                        </span>
+                      )}
+                    </li>
                   ))}
                 </ul>
               </div>

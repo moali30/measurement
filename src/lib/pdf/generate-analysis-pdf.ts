@@ -1,5 +1,6 @@
 import { ReportData } from '@/types/analysis';
 import { PDF_CONFIG } from './config';
+import { buildFooterTemplate, buildHeaderTemplate } from './page-furniture';
 
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_BASE_URL) {
@@ -16,16 +17,21 @@ function getBaseUrl() {
 
 export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
   let browser;
-  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  // @sparticuz/chromium مخصص لبيئة Vercel/Linux serverless. تشغيل `next start`
+  // محلياً هو production أيضاً، لكنه يجب أن يستخدم Chromium الخاص بـ Playwright
+  // (خصوصاً على Windows) وإلا نحاول تشغيل ملف Linux محلياً.
+  if (process.env.VERCEL) {
     const sparticuz = await import('@sparticuz/chromium');
     const chromium = sparticuz.default || sparticuz;
     const playwright = await import('playwright-core');
 
-    // For Vercel Edge / Serverless functions
-    const exePath = await chromium.executablePath(
-      'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
-    );
-    
+    // الحزمة تضمّ الملف التنفيذي داخل bin/chromium.br، فاستدعاء executablePath()
+    // بدون وسيط يستخرج النسخة المطابقة للإصدار المثبّت — لا يمكن أن يحدث انحراف
+    // في الإصدار كما كان يحدث مع رابط tarball ثابت.
+    // CHROMIUM_PACK_URL منفذ هروب لو ضاق حجم حزمة النشر وأردنا تنزيله عن بُعد.
+    const packUrl = process.env.CHROMIUM_PACK_URL;
+    const exePath = await chromium.executablePath(packUrl || undefined);
+
     browser = await playwright.chromium.launch({
       args: [...chromium.args, '--font-render-hinting=none'],
       executablePath: exePath,
@@ -58,26 +64,18 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
     });
 
     await page.waitForSelector('[data-print-ready="true"]', { timeout: 60000 });
+    await page.evaluate((title) => {
+      document.title = title;
+    }, data.title || PDF_CONFIG.metadata.subject);
 
     const pdfBuffer = await page.pdf({
       format: PDF_CONFIG.defaultPageSize,
       printBackground: true,
       preferCSSPageSize: true,
-      margin: {
-        top: `15mm`,
-        bottom: `20mm`,
-        left: `15mm`,
-        right: `15mm`,
-      },
+      margin: PDF_CONFIG.playwrightMargins(),
       displayHeaderFooter: true,
-      headerTemplate: `<span></span>`,
-      footerTemplate: `
-        <div style="width:100%; display:flex; justify-content:center; align-items:center; padding-bottom: 5mm; font-family:Cairo,sans-serif; direction:rtl;">
-          <div style="background-color:#e8eaf6; color:#1a237e; font-size:10pt; font-weight:bold; padding:4px 16px; border-radius:12px; border:1px solid #c5cae9;">
-            صفحة <span class="pageNumber"></span> / <span class="totalPages"></span>
-          </div>
-        </div>
-      `,
+      headerTemplate: buildHeaderTemplate(data),
+      footerTemplate: buildFooterTemplate(data),
     });
 
     return Buffer.from(pdfBuffer);

@@ -6,10 +6,26 @@ import { Axis, ReportData } from '@/types/analysis';
 import { Upload, FileText, Calendar, Edit3, Image as ImageIcon, Plus, Trash2, Play, Database, PenTool } from 'lucide-react';
 import { listFormsServer, loadFormDetailServer } from '@/app/actions/dashboard';
 import { listSignaturesServer } from '@/app/actions/signatures';
+import { readImageAsCompressedDataUrl, readImageUrlAsCompressedDataUrl } from '@/lib/image-utils';
 import { toast } from 'sonner';
 
+/** خيارات المحرك التي يضبطها المستخدم قبل توليد التقرير */
+export interface AnalysisEngineOptions {
+  reversedQuestions: string[];
+  comparisonColumn?: string;
+  scaleMaxOverride?: number;
+  questionScaleMax?: Record<string, number>;
+  questionValueMaps?: Record<string, Record<string, number>>;
+}
+
 interface AnalysisFormProps {
-  onGenerate: (data: Partial<ReportData>, rawData: Record<string, unknown>[], questionTypes?: Record<string, string>, commentQuestions?: string[]) => void;
+  onGenerate: (
+    data: Partial<ReportData>,
+    rawData: Record<string, unknown>[],
+    questionTypes?: Record<string, string>,
+    commentQuestions?: string[],
+    engineOptions?: AnalysisEngineOptions
+  ) => void;
   isLoading: boolean;
 }
 
@@ -28,8 +44,18 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [axes, setAxes] = useState<Axis[]>([{ name: '', start: 1, end: 1 }]);
   
   const [logos, setLogos] = useState({ quality: '', university: '', college: '' });
-  const [signaturesList, setSignaturesList] = useState<{ id: string; name: string; image_url: string; [key: string]: unknown }[]>([]);
-  const [selectedSignatures, setSelectedSignatures] = useState<{name: string, url: string}[]>([]);
+  const [signaturesList, setSignaturesList] = useState<{
+    id: string;
+    name: string;
+    image_url: string;
+    embedded_url?: string;
+    [key: string]: unknown;
+  }[]>([]);
+  const [selectedSignatures, setSelectedSignatures] = useState<{
+    name: string;
+    url: string;
+    sourceUrl?: string;
+  }[]>([]);
 
   // Filtering & processing state
   const [loadedRawData, setLoadedRawData] = useState<Record<string, unknown>[]>([]);
@@ -39,6 +65,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
   const [availableCommentCols, setAvailableCommentCols] = useState<string[]>([]);
   const [commentQuestions, setCommentQuestions] = useState<string[]>([]);
+
+  // خيارات المحرك
+  const [reversedQuestions, setReversedQuestions] = useState<string[]>([]);
+  const [comparisonColumn, setComparisonColumn] = useState('');
+  const [scaleMaxOverride, setScaleMaxOverride] = useState('');
+  const [questionScaleMax, setQuestionScaleMax] = useState<Record<string, number>>({});
+  const [questionValueMaps, setQuestionValueMaps] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
     async function loadForms() {
@@ -52,7 +85,15 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
     async function loadSigs() {
       const res = await listSignaturesServer();
       if (res.success && res.signatures) {
-        setSignaturesList(res.signatures);
+        const embedded = await Promise.all(
+          res.signatures.map(async (signature) => ({
+            ...signature,
+            embedded_url: await readImageUrlAsCompressedDataUrl(signature.image_url).catch(
+              () => signature.image_url
+            ),
+          }))
+        );
+        setSignaturesList(embedded);
       }
     }
     loadForms();
@@ -64,41 +105,73 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       if (!selectedFormId) return;
       const result = await loadFormDetailServer(selectedFormId);
       if (result.success && result.form && result.questions) {
-        // Map logos
-        setLogos(prev => ({
-          ...prev,
-          college: result.form.collegeLogo || prev.college,
-          university: result.form.universityLogo || prev.university,
-          quality: result.form.qualityLogo || prev.quality
+        // النماذج المنشأة من الواجهة تُخزّن order_index من الصفر، بينما بعض
+        // البيانات القديمة تبدأ من 1. نعرض أرقاماً بشرية تبدأ من 1 في الحالتين.
+        const orderOffset = result.questions.some(
+          (question: Record<string, unknown>) => Number(question.order) === 0
+        ) ? 1 : 0;
+        const displayOrder = (question: Record<string, unknown>) =>
+          Number(question.order) + orderOffset;
+        const questionKey = (question: Record<string, unknown>) =>
+          `${displayOrder(question)}. ${question.text}`;
+
+        // قوالب الرأس والتذييل تحتاج الصور مضمّنة كـ data URL. إذا منع المصدر
+        // التحميل عبر CORS نحتفظ بالرابط للغلاف بدلاً من إسقاط الصورة كلياً.
+        const logoSources = {
+          college: result.form.collegeLogo || '',
+          university: result.form.universityLogo || '',
+          quality: result.form.qualityLogo || '',
+        };
+        const embeddedLogos = Object.fromEntries(
+          await Promise.all(
+            Object.entries(logoSources).map(async ([key, value]) => [
+              key,
+              value
+                ? await readImageUrlAsCompressedDataUrl(value).catch(() => value)
+                : '',
+            ])
+          )
+        ) as typeof logos;
+        setLogos((previous) => ({
+          college: embeddedLogos.college || previous.college,
+          university: embeddedLogos.university || previous.university,
+          quality: embeddedLogos.quality || previous.quality,
         }));
         
-        // Map axes based on question minLabel
+        // Map axes based on question minLabel.
+        // مهم: النطاق يجب أن يُبنى على ترتيب السؤال الأصلي بعد تحويله لرقم عرض
+        // يبدأ من 1، وليس على ترتيبه داخل قائمة likert. مفتاح العمود أدناه يحمل
+        // الرقم نفسه، وprocessData
+        // يستخرج questionNumber من نفس المفتاح. استخدام i+1 كان يزيح النطاق
+        // بعدد الأسئلة غير الليكرتية السابقة (سؤال «النوع» مثلاً) فتخرج متوسطات
+        // المحاور محسوبة على أسئلة أخرى بصمت.
         const formAxes: Axis[] = [];
-        let currentAxis: Partial<Axis> | null = null;
-        let lastOrder = 0;
+        const axesByName = new Map<string, Axis>();
 
         const likertQuestions = result.questions.filter((q: Record<string, unknown>) => q.type === 'likert');
 
-        likertQuestions.forEach((q: Record<string, unknown>, i: number) => {
-          const currentOrder = i + 1;
-          if (q.minLabel) {
-             if (currentAxis && currentAxis.name !== q.minLabel) {
-                // close previous axis
-                (currentAxis as Partial<Axis>).end = lastOrder;
-                formAxes.push(currentAxis as Axis);
-                // start new axis
-                currentAxis = { name: q.minLabel as string, start: currentOrder };
-             } else if (!currentAxis) {
-                currentAxis = { name: q.minLabel as string, start: currentOrder };
-             }
-          }
-          lastOrder = currentOrder;
-        });
+        likertQuestions.forEach((q: Record<string, unknown>) => {
+          const currentOrder = displayOrder(q);
+          if (!Number.isFinite(currentOrder)) return;
+          const axisName = String(q.minLabel || '').trim();
+          if (!axisName) return;
 
-        if (currentAxis) {
-          (currentAxis as Partial<Axis>).end = lastOrder;
-          formAxes.push(currentAxis as Axis);
-        }
+          const existing = axesByName.get(axisName);
+          if (existing) {
+            existing.start = Math.min(existing.start, currentOrder);
+            existing.end = Math.max(existing.end, currentOrder);
+            existing.questionNumbers = [...(existing.questionNumbers ?? []), currentOrder];
+          } else {
+            const axis: Axis = {
+              name: axisName,
+              start: currentOrder,
+              end: currentOrder,
+              questionNumbers: [currentOrder],
+            };
+            axesByName.set(axisName, axis);
+            formAxes.push(axis);
+          }
+        });
 
         if (formAxes.length > 0) {
           setAxes(formAxes);
@@ -107,6 +180,8 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         // --- Process Raw Data and Filters immediately ---
         const rawData: Record<string, unknown>[] = [];
         const qTypes: Record<string, string> = {};
+        const qScales: Record<string, number> = {};
+        const qValueMaps: Record<string, Record<string, number>> = {};
         const filterableCols: {column: string, values: string[]}[] = [];
         
         const { responses, answers } = result;
@@ -121,13 +196,26 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         });
         
         const analysisQuestions = result.questions.filter((q: Record<string, unknown>) => 
-          ['likert', 'text', 'textarea', 'rating', 'number', 'radio', 'select', 'dropdown', 'checkbox'].includes(q.type as string)
+          ['likert', 'text', 'textarea', 'rating', 'linear_scale', 'number', 'yes_no', 'radio', 'select', 'dropdown', 'multiple_choice', 'checkbox'].includes(q.type as string)
         );
         
         analysisQuestions.forEach((q: Record<string, unknown>) => {
-            const key = `${q.order}. ${q.text}`;
+            const key = questionKey(q);
             qTypes[key] = q.type as string;
-            if (['radio', 'select', 'dropdown'].includes(q.type as string)) {
+            const explicitMax = Number(q.maxValue);
+            const optionLabels = Array.isArray(q.options)
+              ? q.options.map((option) => String(option).trim()).filter(Boolean)
+              : [];
+            const optionsCount = optionLabels.length;
+            if (Number.isFinite(explicitMax) && explicitMax > 1) {
+              qScales[key] = explicitMax;
+            } else if (q.type === 'likert' && optionsCount > 1) {
+              qScales[key] = optionsCount;
+              qValueMaps[key] = Object.fromEntries(
+                optionLabels.map((option, index) => [option, optionsCount - index])
+              );
+            }
+            if (['radio', 'select', 'dropdown', 'multiple_choice'].includes(q.type as string)) {
                 filterableCols.push({ column: key, values: [] });
             }
         });
@@ -138,12 +226,12 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
           
           analysisQuestions.forEach((q: Record<string, unknown>) => {
             const ans = respAnswers.find((a: Record<string, unknown>) => a.questionId === q.$id);
-            const key = `${q.order}. ${q.text}`;
+            const key = questionKey(q);
             if (ans) {
                row[key] = ans.numberValue !== null && ans.numberValue !== undefined ? ans.numberValue : ans.textValue;
                
                // Collect unique values for filterable columns
-               if (['radio', 'select', 'dropdown'].includes(q.type as string) && row[key]) {
+               if (['radio', 'select', 'dropdown', 'multiple_choice'].includes(q.type as string) && row[key]) {
                    const fCol = filterableCols.find(f => f.column === key);
                    if (fCol && !fCol.values.includes(row[key] as string)) {
                        fCol.values.push(row[key] as string);
@@ -158,19 +246,21 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         
         setLoadedRawData(rawData);
         setQuestionTypes(qTypes);
+        setQuestionScaleMax(qScales);
+        setQuestionValueMaps(qValueMaps);
         setAvailableFilters(filterableCols.filter(f => f.values.length > 0));
         setActiveFilters({});
         
-        const allQuestionsKeys = analysisQuestions.map((q: Record<string, unknown>) => `${q.order}. ${q.text}`);
+        const allQuestionsKeys = analysisQuestions.map(questionKey);
         setAvailableCommentCols(allQuestionsKeys);
         const textQuestions = analysisQuestions
            .filter((q: Record<string, unknown>) => q.type === 'text' || q.type === 'textarea')
-           .map((q: Record<string, unknown>) => `${q.order}. ${q.text}`);
+           .map(questionKey);
         setCommentQuestions(textQuestions);
         
         if (result.form.title) {
            setSurveyTitle(result.form.title);
-           if (!title) setTitle(result.form.title);
+           setTitle((current) => current || result.form.title);
         }
         if (result.form.createdAt) {
            try {
@@ -182,7 +272,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       }
     }
     fetchFormDetails();
-  }, [selectedFormId, title]);
+  }, [selectedFormId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -225,6 +315,8 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                 
                 setLoadedRawData(rawData);
                 setQuestionTypes({});
+                setQuestionScaleMax({});
+                setQuestionValueMaps({});
                 setAvailableFilters(filterableCols);
                 setActiveFilters({});
                 
@@ -258,14 +350,86 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
     }
   };
 
-  const handleImageUpload = (type: 'quality' | 'university' | 'college' | 'signature', e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (type: 'quality' | 'university' | 'college' | 'signature', e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        setLogos(prev => ({ ...prev, [type]: result }));
-      };
-      reader.readAsDataURL(e.target.files[0]);
+      try {
+        const dataUrl = await readImageAsCompressedDataUrl(e.target.files[0]);
+        setLogos(prev => ({ ...prev, [type]: dataUrl }));
+      } catch {
+        toast.error('تعذّرت قراءة الصورة. جرّب صيغة PNG أو JPG.');
+      }
+    }
+  };
+
+  const handleSettingsUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const settingsFile = event.target.files?.[0];
+    if (!settingsFile) return;
+
+    try {
+      const parsed = JSON.parse(await settingsFile.text()) as Record<string, unknown>;
+      if (parsed.version !== 1 || typeof parsed.title !== 'string' || !Array.isArray(parsed.axes)) {
+        throw new Error('unsupported settings format');
+      }
+
+      setTitle(parsed.title);
+      if (typeof parsed.surveyDate === 'string') setSurveyDate(parsed.surveyDate);
+      if (typeof parsed.reportDate === 'string') setReportDate(parsed.reportDate);
+      if (typeof parsed.manualComment === 'string') setManualComment(parsed.manualComment);
+
+      const loadedAxes = parsed.axes.filter((axis): axis is Axis => {
+        if (!axis || typeof axis !== 'object') return false;
+        const candidate = axis as Partial<Axis>;
+        return (
+          typeof candidate.name === 'string' &&
+          typeof candidate.start === 'number' &&
+          typeof candidate.end === 'number'
+        );
+      });
+      if (loadedAxes.length > 0) setAxes(loadedAxes);
+
+      if (Array.isArray(parsed.filters)) {
+        const restoredFilters: Record<string, string[]> = {};
+        parsed.filters.forEach((filter) => {
+          if (!filter || typeof filter !== 'object') return;
+          const candidate = filter as { column?: unknown; values?: unknown };
+          if (typeof candidate.column === 'string' && Array.isArray(candidate.values)) {
+            restoredFilters[candidate.column] = candidate.values.map(String);
+          }
+        });
+        setActiveFilters(restoredFilters);
+      }
+
+      if (Array.isArray(parsed.signatures)) {
+        setSelectedSignatures(
+          parsed.signatures
+            .filter((signature) => signature && typeof signature === 'object')
+            .map((signature) => signature as { name?: unknown; url?: unknown })
+            .filter((signature) => typeof signature.name === 'string' && typeof signature.url === 'string')
+            .slice(0, 2)
+            .map((signature) => ({ name: String(signature.name), url: String(signature.url) }))
+        );
+      }
+
+      if (parsed.analysisOptions && typeof parsed.analysisOptions === 'object') {
+        const options = parsed.analysisOptions as {
+          reversedQuestions?: unknown;
+          comparisonColumn?: unknown;
+          scaleMaxOverride?: unknown;
+        };
+        setReversedQuestions(
+          Array.isArray(options.reversedQuestions) ? options.reversedQuestions.map(String) : []
+        );
+        setComparisonColumn(typeof options.comparisonColumn === 'string' ? options.comparisonColumn : '');
+        setScaleMaxOverride(
+          typeof options.scaleMaxOverride === 'number' ? String(options.scaleMaxOverride) : ''
+        );
+      }
+
+      toast.success('تم تحميل إعدادات التقرير. راجع مصدر البيانات ثم أنشئ التقرير.');
+    } catch {
+      toast.error('ملف الإعدادات غير صالح أو من إصدار غير مدعوم.');
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -279,7 +443,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
   const handleAxisChange = (index: number, field: keyof Axis, value: string | number) => {
     const newAxes = [...axes];
-    newAxes[index] = { ...newAxes[index], [field]: value };
+    newAxes[index] = {
+      ...newAxes[index],
+      [field]: value,
+      // تعديل النطاق يعلن أن المستخدم يريد النطاق اليدوي بدلاً من العضوية
+      // الدقيقة القادمة من قاعدة البيانات.
+      ...((field === 'start' || field === 'end') ? { questionNumbers: undefined } : {}),
+    };
     setAxes(newAxes);
   };
 
@@ -297,8 +467,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       manualComment,
       axes: validAxes,
       logos,
-      signatures: selectedSignatures,
-      filters: filterArray
+      signatures: selectedSignatures.map(({ name, url }) => ({ name, url })),
+      filters: filterArray,
+      analysisOptions: {
+        reversedQuestions,
+        comparisonColumn: comparisonColumn || undefined,
+        scaleMaxOverride: scaleMaxOverride ? Number(scaleMaxOverride) : undefined,
+      }
     };
 
     if (dataSource === 'db') {
@@ -327,7 +502,17 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
        return;
     }
 
-    onGenerate(baseData, finalData, questionTypes, commentQuestions);
+    onGenerate(baseData, finalData, questionTypes, commentQuestions, {
+      reversedQuestions,
+      scaleMaxOverride: scaleMaxOverride ? Number(scaleMaxOverride) : undefined,
+      questionScaleMax,
+      questionValueMaps,
+      // عمود المقارنة لا معنى له لو صُفّي إلى قيمة واحدة
+      comparisonColumn:
+        comparisonColumn && (activeFilters[comparisonColumn]?.length ?? 0) !== 1
+          ? comparisonColumn
+          : undefined,
+    });
   };
 
   return (
@@ -416,6 +601,13 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
             </label>
             <textarea rows={4} value={manualComment} onChange={e => setManualComment(e.target.value)} placeholder="أدخل أي ملاحظات إضافية هنا" className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
           </div>
+
+          <div className="mt-5">
+            <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer font-semibold text-sm">
+              <FileText className="w-4 h-4" /> تحميل إعدادات تقرير محفوظة (JSON)
+              <input type="file" accept="application/json,.json" onChange={handleSettingsUpload} className="hidden" />
+            </label>
+          </div>
         </div>
 
         {/* Filters Section */}
@@ -499,6 +691,85 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
           </div>
         )}
 
+      {/* Engine options: reverse-coded questions + category comparison */}
+      {availableCommentCols.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800 dark:text-indigo-400">
+            خيارات التحليل المتقدمة
+          </h2>
+
+          {availableFilters.length > 0 && (
+            <div className="mb-8">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                مقارنة بين الفئات
+              </label>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                اختر عموداً تصنيفياً لإضافة جدول يقارن متوسطات المحاور بين فئاته (مثلاً: النوع أو المستوى).
+              </p>
+              <select
+                value={comparisonColumn}
+                onChange={(e) => setComparisonColumn(e.target.value)}
+                className="w-full md:w-2/3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">-- بدون مقارنة --</option>
+                {availableFilters.map((filter) => (
+                  <option key={filter.column} value={filter.column}>{filter.column}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="mb-8">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              سُلَّم القياس
+            </label>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              اتركه تلقائياً لاستخدام توصيف كل سؤال أو اكتشافه من البيانات، وثبّته يدوياً إذا كان ملف Excel لا يحتوي توصيف السُّلَّم.
+            </p>
+            <select
+              value={scaleMaxOverride}
+              onChange={(e) => setScaleMaxOverride(e.target.value)}
+              className="w-full md:w-2/3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">تلقائي — لكل سؤال</option>
+              {[3, 4, 5, 7, 10].map((value) => (
+                <option key={value} value={value}>تثبيت السُّلَّم على {value} درجات</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              الأسئلة العكسية
+            </label>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              حدد الأسئلة التي تكون فيها أدنى إجابة هي الأفضل (مثل «أواجه صعوبة في…»).
+              ستُعاد ترميزها قبل الحساب حتى لا تُحسب نقطة ضعف وهي نقطة قوة.
+            </p>
+            <div className="max-h-56 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50/50 dark:bg-gray-900/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {availableCommentCols
+                  .filter((col) => !commentQuestions.includes(col))
+                  .map((col) => (
+                    <label key={col} className="flex items-start gap-3 cursor-pointer bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-700 hover:border-indigo-500 transition-colors shadow-sm">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox mt-1 text-indigo-600 rounded"
+                        checked={reversedQuestions.includes(col)}
+                        onChange={(e) => {
+                          if (e.target.checked) setReversedQuestions([...reversedQuestions, col]);
+                          else setReversedQuestions(reversedQuestions.filter((c) => c !== col));
+                        }}
+                      />
+                      <span className="text-sm text-gray-800 dark:text-gray-200 leading-tight">{col}</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Axes */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
         <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800 dark:text-indigo-400">
@@ -556,13 +827,17 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
             <div key={index} className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">التوقيع {index + 1}</label>
               <select 
-                value={selectedSignatures[index]?.url || ""}
+                value={selectedSignatures[index]?.sourceUrl || selectedSignatures[index]?.url || ""}
                 onChange={(e) => {
                   const val = e.target.value;
                   const sig = signaturesList.find(s => s.image_url === val);
                   const newSigs = [...selectedSignatures];
                   if (sig) {
-                    newSigs[index] = { name: sig.name, url: sig.image_url };
+                    newSigs[index] = {
+                      name: sig.name,
+                      url: sig.embedded_url || sig.image_url,
+                      sourceUrl: sig.image_url,
+                    };
                   } else {
                     newSigs.splice(index, 1); // remove if empty
                   }

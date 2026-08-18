@@ -1,4 +1,5 @@
 import { Axis, QuestionResult, ReportData } from '@/types/analysis';
+import { DISTRIBUTION_BANDS } from '@/lib/analysis/scale';
 
 export function cleanAutoCommentHtml(html: string): string {
   return html
@@ -22,18 +23,75 @@ export function getTop10ChartData(resultsForAnalysis: QuestionResult[]) {
   }));
 }
 
-export function getWeightDistributionPieData(results: QuestionResult[]) {
-  const dist = {
-    high: results.filter((item) => item.relativeWeight >= 80).length,
-    medium: results.filter((item) => item.relativeWeight >= 60 && item.relativeWeight < 80).length,
-    low: results.filter((item) => item.relativeWeight < 60).length,
+export interface DistributionBucket {
+  name: string;
+  value: number;
+  fill: string;
+  /** نسبة الأسئلة داخل هذه الفئة من إجمالي الأسئلة */
+  percentage: number;
+}
+
+/**
+ * توزيع الأسئلة على فئات الأداء، بالعدد والنسبة معاً.
+ *
+ * وسيلة الإيضاح في التقرير تُبنى من هنا بدل `<Legend/>` الافتراضي، لأن الأخير
+ * يعرض الاسم فقط ويرسم عناصر مطلقة الموضع تُقصّ عند حد الصفحة في الطباعة.
+ */
+export function getWeightDistribution(results: QuestionResult[]): DistributionBucket[] {
+  const total = results.length;
+  const counts = {
+    high: results.filter((item) => item.relativeWeight >= DISTRIBUTION_BANDS.high).length,
+    medium: results.filter(
+      (item) =>
+        item.relativeWeight >= DISTRIBUTION_BANDS.medium &&
+        item.relativeWeight < DISTRIBUTION_BANDS.high
+    ).length,
+    low: results.filter((item) => item.relativeWeight < DISTRIBUTION_BANDS.medium).length,
   };
 
   return [
-    { name: 'مرتفع (>=80%)', value: dist.high, fill: '#4caf50' },
-    { name: 'متوسط (60-80%)', value: dist.medium, fill: '#ffc107' },
-    { name: 'منخفض (<60%)', value: dist.low, fill: '#f44336' },
-  ].filter((item) => item.value > 0);
+    { name: `مرتفع (≥ ${DISTRIBUTION_BANDS.high}%)`, value: counts.high, fill: '#4caf50' },
+    {
+      name: `متوسط (${DISTRIBUTION_BANDS.medium}-${DISTRIBUTION_BANDS.high}%)`,
+      value: counts.medium,
+      fill: '#ffc107',
+    },
+    { name: `منخفض (< ${DISTRIBUTION_BANDS.medium}%)`, value: counts.low, fill: '#f44336' },
+  ].map((bucket) => ({
+    ...bucket,
+    percentage: total > 0 ? Math.round((bucket.value / total) * 100) : 0,
+  }));
+}
+
+/** الشرائح غير الصفرية فقط — الرسم الدائري لا يجب أن يحتوي قطاعات بلا مساحة */
+export function getWeightDistributionPieData(results: QuestionResult[]): DistributionBucket[] {
+  return getWeightDistribution(results).filter((item) => item.value > 0);
+}
+
+/** أدنى الأسئلة تقييماً — تصاعدياً حتى يقرأ الرسم من الأسوأ */
+export function getBottom5ChartData(resultsForAnalysis: QuestionResult[]) {
+  return resultsForAnalysis
+    .slice(-5)
+    .reverse()
+    .map((item) => ({
+      name: `س ${item.questionNumber}`,
+      weight: item.relativeWeight,
+    }));
+}
+
+/**
+ * يحوّل تاريخ ISO إلى صيغة عربية مقروءة بأرقام لاتينية.
+ * يُعيد النص كما هو إذا تعذّر التحويل، فالغلاف لا يجب أن يعرض "Invalid Date".
+ */
+export function formatReportDate(value: string | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('ar-EG-u-nu-latn', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 export function getAxisExtremes(axes: Axis[]): { best: Axis | null; worst: Axis | null } {

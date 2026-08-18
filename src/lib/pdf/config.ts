@@ -1,19 +1,45 @@
 export type PageSize = 'A4' | 'Letter';
 
+/**
+ * هوامش الصفحة بالمليمتر — المصدر الوحيد للحقيقة.
+ *
+ * تُستهلك من `page.pdf()` في `generate-analysis-pdf.ts` فقط. ملف `print.css`
+ * لا يعلن `@page { margin }` عن قصد، حتى لا يوجد مصدران متعارضان يتغير أثرهما
+ * حسب إصدار Chromium وقيمة `preferCSSPageSize`.
+ *
+ * المساحة العلوية والسفلية تحجز مكان الرأس والتذييل الجاريين.
+ */
+const MARGINS_MM = {
+  /** 8mm إزاحة + شعار 34px (~9mm) + خط فاصل + فراغ تنفّس */
+  top: 30,
+  right: 15,
+  /** 6mm إزاحة + سطر التذييل + فراغ تنفّس */
+  bottom: 20,
+  left: 15,
+} as const;
+
 export const PDF_CONFIG = {
   defaultPageSize: 'A4' as PageSize,
-  margins: {
-    top: 20,
-    bottom: 22,
-    left: 18,
-    right: 18,
-  },
+
+  margins: MARGINS_MM,
+
   minBodyFontPt: 9,
-  tokenTtlMs: 5 * 60 * 1000,
+
   metadata: {
     author: 'لجنة القياس والتقويم',
     subject: 'تقرير تحليل استبيان',
   },
+
+  /** يحوّل الهوامش إلى الصيغة التي يتوقعها Playwright */
+  playwrightMargins() {
+    return {
+      top: `${MARGINS_MM.top}mm`,
+      right: `${MARGINS_MM.right}mm`,
+      bottom: `${MARGINS_MM.bottom}mm`,
+      left: `${MARGINS_MM.left}mm`,
+    };
+  },
+
   buildFilename(title: string, reportDate: string) {
     const safeTitle = title.replace(/[\\/:*?"<>|]/g, '_').trim() || 'تحليل_الاستبيان';
     const safeDate = reportDate.replace(/[\\/:*?"<>|]/g, '-');
