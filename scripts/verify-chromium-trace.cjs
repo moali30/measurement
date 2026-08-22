@@ -42,6 +42,24 @@ if (missingArchives.length > 0) {
   process.exit(1);
 }
 
+// The running header and footer render in a Chromium document that sees only
+// system fonts, and the bundled Chromium ships Open Sans alone -- no Arabic.
+// If this font stops being traced, every Arabic label in the page furniture
+// silently disappears from the deployed PDF while still rendering locally.
+const requiredFonts = ['fonts/Cairo-Variable.ttf'];
+const missingFonts = requiredFonts.filter(
+  (font) => !tracedFiles.some((file) => file.endsWith(`/${font}`)),
+);
+
+if (missingFonts.length > 0) {
+  console.error('The analysis API deployment trace is missing Arabic fonts:');
+  for (const font of missingFonts) {
+    console.error(`- ${font}`);
+  }
+  process.exit(1);
+}
+
 console.log(
-  `Chromium deployment trace verified: ${requiredArchives.length} runtime archives included.`,
+  `Chromium deployment trace verified: ${requiredArchives.length} runtime archives ` +
+    `and ${requiredFonts.length} Arabic font included.`,
 );

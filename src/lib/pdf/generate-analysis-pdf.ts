@@ -1,3 +1,7 @@
+import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { PDFDocument } from 'pdf-lib';
 
 import { ReportData } from '@/types/analysis';
@@ -15,6 +19,46 @@ function getBaseUrl() {
     return `https://${process.env.VERCEL_URL}`;
   }
   return 'http://localhost:3000';
+}
+
+/** الملفات التي يقرأها fontconfig */
+const FONT_FILE = /\.(ttf|otf|ttc)$/i;
+
+/**
+ * يثبّت خطوط المشروع كخطوط نظام قبل إقلاع Chromium على الخادم.
+ *
+ * قوالب الرأس والتذييل تُرسم في مستند منفصل لا يرث خطوط الصفحة، ولا ينتظر
+ * تحميل أي خط ويب — جُرّب حقن `@font-face` بـ data URI داخل القالب فأُهمل تماماً
+ * وسقط النص إلى خط النظام. فلم يبق إلا خطوط النظام نفسها.
+ *
+ * وحزمة @sparticuz/chromium لا تحمل سوى Open Sans (راجع `bin/fonts.tar.br`)، وهو
+ * بلا حرف عربي واحد، فيخرج الرأس والتذييل فارغين على Vercel بينما يظهران محلياً
+ * لأن ويندوز يوفّر Segoe UI. نسخ الخط إلى مجلد fontconfig يحلّ ذلك من أصله.
+ *
+ * `FONTCONFIG_PATH` تضبطها الحزمة نفسها على /tmp/fonts، وهو مجلد معلن داخل fonts.conf.
+ */
+function installReportFonts(): void {
+  // جذر الدالة على Vercel هو مجلد العمل، وملفات `outputFileTracingIncludes` تُوضع
+  // بمساراتها نسبةً إليه. نجرّب بدائل ونسجّل المستخدم ليظهر في سجلّ الخادم.
+  const candidates = [join(process.cwd(), 'fonts'), join(process.cwd(), '.next', 'fonts')];
+  const source = candidates.find((candidate) => existsSync(candidate));
+
+  if (!source) {
+    console.warn(
+      `[PDF] fonts directory not found (tried ${candidates.join(', ')}) — Arabic page furniture will render blank`
+    );
+    return;
+  }
+
+  const target = process.env.FONTCONFIG_PATH || join(tmpdir(), 'fonts');
+  mkdirSync(target, { recursive: true });
+
+  const installed = readdirSync(source).filter((entry) => FONT_FILE.test(entry));
+  for (const entry of installed) {
+    copyFileSync(join(source, entry), join(target, entry));
+  }
+
+  console.log(`[PDF] installed ${installed.length} font(s) from ${source} into ${target}`);
 }
 
 /** المدى يتجاوز عدد صفحات المستند — خطأ متوقّع لا عطل في الطباعة */
@@ -60,6 +104,9 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
     // CHROMIUM_PACK_URL منفذ هروب لو ضاق حجم حزمة النشر وأردنا تنزيله عن بُعد.
     const packUrl = process.env.CHROMIUM_PACK_URL;
     const exePath = await chromium.executablePath(packUrl || undefined);
+
+    // بعد استخراج fonts.tar.br وقبل الإقلاع: Chromium يقرأ الخطوط مرة واحدة عند بدء التشغيل
+    installReportFonts();
 
     browser = await playwright.chromium.launch({
       args: [...chromium.args, '--font-render-hinting=none'],
