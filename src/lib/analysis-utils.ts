@@ -108,6 +108,13 @@ function parseColumns(
   const columns: ParsedColumn[] = [];
   const commentGroups: { question: string; answers: string[] }[] = [];
 
+  // قائمة أسئلة التعليقات تصل من واجهة مربّعات اختيار تعرض كل الأعمدة،
+  // فوجودها — حتى فارغة — يعني أن المستخدم حسم أمر كل عمود. عمود نصي لم يختره
+  // يجب ألّا يُطبع بتاتاً. بدون هذا التمييز كان عمود «الاسم» — وهو بلا قيم
+  // رقمية — يسقط في الاستثناء أدناه وتُطبع أسماء المشاركين رغم إزالة علامة الصح.
+  // غياب القائمة (undefined) يبقى على الاكتشاف التلقائي للمستدعين القدامى.
+  const hasExplicitCommentSelection = Array.isArray(commentQuestions);
+
   questions.forEach((question, index) => {
     const qType = questionTypes?.[question];
 
@@ -188,7 +195,7 @@ function parseColumns(
         missing,
         binaryHits,
       });
-    } else if (textAnswers.length > 0) {
+    } else if (textAnswers.length > 0 && !hasExplicitCommentSelection) {
       commentGroups.push({ question, answers: textAnswers });
     }
   });

@@ -219,7 +219,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       </section>
 
       {/* ===== فهرس المحتويات ===== */}
-      <section className="print-section print-section--flow">
+      <section className="print-section print-section--flow print-section--front-matter-end">
         <h2 className="print-section-title">فهرس المحتويات</h2>
         <ol className="print-toc">
           {tocEntries.map((entry) => (

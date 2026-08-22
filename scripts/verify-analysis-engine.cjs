@@ -106,4 +106,33 @@ assert.equal(processed.axes[0].cronbachAlpha, 1);
 assert.equal(processed.overallCronbachAlpha, 1);
 assert.equal(processed.comparison.rows.length, 2);
 
+// عمود نصي لم يختره المستخدم في قائمة التعليقات يخرج من التقرير بالكامل —
+// لا يُحسب كمياً ولا يُطبع كتعليق. أسماء المشاركين كانت تُطبع رغم إزالة علامة الصح.
+const nameColumn = '1. الاسم';
+const notesColumn = '5. ملاحظات';
+const textRows = [
+  { [nameColumn]: 'محمد علي', [notesColumn]: 'تطوير المعامل.', [q1]: 'موافق' },
+  { [nameColumn]: 'سارة أحمد', [notesColumn]: 'زيادة التطبيقات العملية.', [q1]: 'محايد' },
+];
+const textTypes = { [nameColumn]: 'text', [notesColumn]: 'textarea', [q1]: 'likert' };
+
+const withoutName = analysis.processData(textRows, [], textTypes, [notesColumn]);
+assert.deepEqual(
+  withoutName.comments.map((group) => group.question),
+  [notesColumn]
+);
+
+const withName = analysis.processData(textRows, [], textTypes, [nameColumn, notesColumn]);
+assert.deepEqual(
+  withName.comments.map((group) => group.question),
+  [nameColumn, notesColumn]
+);
+
+// بلا قائمة صريحة (مستدعٍ قديم) يبقى الاكتشاف التلقائي للأعمدة النصية
+const autoDetected = analysis.processData(textRows, [], textTypes);
+assert.deepEqual(
+  autoDetected.comments.map((group) => group.question),
+  [nameColumn, notesColumn]
+);
+
 console.log('Analysis engine verification passed.');

@@ -1,4 +1,5 @@
 import { ReportData } from '@/types/analysis';
+import { PDF_CONFIG } from './config';
 
 /**
  * الرأس والتذييل الجاريان اللذان يتكرران على كل صفحة من التقرير.
@@ -81,53 +82,89 @@ export function buildHeaderTemplate(data: ReportData): string {
 }
 
 /**
- * التذييل: جهة الإعداد يميناً، ورقم الصفحة من الإجمالي وسطاً.
- * `pageNumber` و`totalPages` صنفان خاصان يملؤهما Chromium.
+ * ارتفاع صندوق التذييل المرسوم فعلياً.
+ *
+ * Chromium يرسم قالب التذييل داخل هامش الصفحة السفلي ويقصّ ما يفيض — ولأن
+ * القالب محاذٍ للأسفل (`align-items:flex-end` في صفحة قالب Chromium نفسها)
+ * فإن المقصوص هو **أعلى** المحتوى، أي سطر اللقب فوق التوقيع بالضبط.
+ * لذلك نثبّت ارتفاعاً أقل من الهامش السفلي بدل ترك المحتوى يحدّد ارتفاعه:
+ * أي توقيع أطول من المتوقع يتقلّص داخل الصندوق بدل أن يبتلع اللقب.
  */
+const FOOTER_BOX_MM = PDF_CONFIG.margins.bottom - 5;
+
+/** أقصى ارتفاع لصورة التوقيع داخل صندوق التذييل */
+const SIGNATURE_IMAGE_MM = 7;
+
 /**
  * خانة التوقيع: اللقب أولاً ثم صورة التوقيع تحته — الترتيب المعتاد في
  * المستندات الرسمية، فالقارئ يعرف صاحب التوقيع قبل أن يراه.
+ *
+ * اللقب على سطر واحد إجباراً (`nowrap` مع قصّ بالنقاط): اللقب الطويل الملتف
+ * على سطرين يرفع الخانة فوق حدّ الهامش فيقصّها Chromium من أعلى ويختفي اللقب
+ * كلياً — وهو أسوأ من لقب مختصر بنقاط.
  */
 function signatureCells(data: ReportData): string {
   const signatures = (data.signatures ?? []).slice(0, 2);
+  const titleStyle =
+    'font-size:7pt;color:#1a237e;font-weight:700;line-height:1.25;margin-bottom:0.8mm;' +
+    'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56mm;';
 
   if (signatures.length === 0) {
     return `
       <div style="text-align:center;min-width:34mm;">
-        <div style="font-size:7pt;color:#1a237e;font-weight:700;margin-bottom:0.8mm;">التوقيع المعتمد</div>
-        <div style="border-bottom:1px solid #999;width:32mm;height:5mm;margin:0 auto;"></div>
+        <div style="${titleStyle}">التوقيع المعتمد</div>
+        <div style="border-bottom:1px solid #999;width:32mm;height:4mm;margin:0 auto;"></div>
       </div>`;
   }
 
   return signatures
     .map((signature) => {
-      const name = escapeHtml(signature.name || 'التوقيع المعتمد');
+      const name = escapeHtml((signature.name || '').trim() || 'التوقيع المعتمد');
       const image = signature.url?.startsWith('data:')
-        ? `<img src="${signature.url}" style="display:block;max-width:28mm;max-height:8mm;object-fit:contain;margin:0 auto;" />`
-        : '<div style="border-bottom:1px solid #999;width:26mm;height:5mm;margin:0 auto;"></div>';
+        ? `<img src="${signature.url}" style="display:block;max-width:28mm;max-height:${SIGNATURE_IMAGE_MM}mm;object-fit:contain;margin:0 auto;" />`
+        : `<div style="border-bottom:1px solid #999;width:26mm;height:${SIGNATURE_IMAGE_MM}mm;margin:0 auto;"></div>`;
 
       return `
-        <div style="text-align:center;min-width:28mm;">
-          <div style="font-size:7pt;color:#1a237e;font-weight:700;margin-bottom:0.8mm;">${name}</div>
+        <div style="text-align:center;min-width:28mm;max-width:56mm;">
+          <div style="${titleStyle}">${name}</div>
           ${image}
         </div>`;
     })
     .join('');
 }
 
-export function buildFooterTemplate(data: ReportData): string {
+export interface FooterOptions {
+  /**
+   * الغلاف وفهرس المحتويات صفحتا تعريف بالتقرير لا صفحتا محتوى معتمد، فلا
+   * يوقّعهما أحد. تُمرَّر `false` للتمرير الذي يولّد هاتين الصفحتين.
+   */
+  withSignatures?: boolean;
+}
+
+/**
+ * التذييل: جهة الإعداد يميناً، ورقم الصفحة من الإجمالي وسطاً، والتوقيع يساراً.
+ * `pageNumber` و`totalPages` صنفان خاصان يملؤهما Chromium.
+ */
+export function buildFooterTemplate(data: ReportData, options: FooterOptions = {}): string {
+  const { withSignatures = true } = options;
+
   return `
     <div style="
       width:100%;
+      height:${FOOTER_BOX_MM}mm;
       box-sizing:border-box;
+      display:flex;
+      align-items:flex-end;
       padding:0 15mm;
-      margin-bottom:6mm;
+      margin-bottom:4mm;
+      overflow:hidden;
       font-family:'Cairo','Segoe UI',Tahoma,sans-serif;
       direction:rtl;
       -webkit-print-color-adjust:exact;
       print-color-adjust:exact;
     ">
       <div style="
+        width:100%;
         display:flex;
         align-items:flex-end;
         justify-content:space-between;
@@ -135,10 +172,13 @@ export function buildFooterTemplate(data: ReportData): string {
         border-top:1px solid #c5cae9;
         padding-top:2mm;
       ">
-        <div style="font-size:8pt;font-weight:700;color:#1a237e;white-space:nowrap;">
+        <!-- الطرفان يتمددان بالتساوي والوسط بقياس محتواه، فيبقى رقم الصفحة في منتصف
+             الورقة سواء حمل الطرف المقابل توقيعاً أم كان خالياً في صفحات التعريف -->
+        <div style="flex:1 1 0;font-size:8pt;font-weight:700;color:#1a237e;white-space:nowrap;">
           إعداد لجنة القياس والتقويم
         </div>
         <div style="
+          flex:0 0 auto;
           background-color:#e8eaf6;
           color:#1a237e;
           font-size:8pt;
@@ -154,8 +194,8 @@ export function buildFooterTemplate(data: ReportData): string {
           </span>
         </div>
         <!-- التوقيع أقصى الشمال: آخر عنصر في تدفّق RTL -->
-        <div style="display:flex;align-items:flex-end;justify-content:flex-end;gap:4mm;">
-          ${signatureCells(data)}
+        <div style="flex:1 1 0;display:flex;align-items:flex-end;justify-content:flex-end;gap:4mm;">
+          ${withSignatures ? signatureCells(data) : ''}
         </div>
       </div>
     </div>
