@@ -1,4 +1,5 @@
 import {
+  AnalysisWarning,
   Axis,
   CategoryComparison,
   QuestionResult,
@@ -56,6 +57,8 @@ export interface ProcessOptions {
   scaleMaxOverride?: number;
   /** توصيف السُّلَّم لكل سؤال كما هو مخزّن في النموذج */
   questionScaleMax?: Record<string, number>;
+  /** الحد الأدنى الفعلي لكل سؤال، ويدعم المقاييس الخطية التي تبدأ من صفر */
+  questionScaleMin?: Record<string, number>;
   /** ترميز خيارات السؤال بالترتيب المخزّن في النموذج */
   questionValueMaps?: Record<string, Record<string, number>>;
   /** عمود التصنيف الذي تُبنى عليه المقارنة بين الفئات */
@@ -87,6 +90,7 @@ type ProcessResult = Pick<
   | 'overallCronbachAlpha'
   | 'cronbachRespondents'
   | 'comparison'
+  | 'analysisWarnings'
 >;
 
 /** يستخرج رقم السؤال من بادئة عنوان العمود، وإلا فترتيبه */
@@ -206,12 +210,13 @@ function parseColumns(
 /** يحوّل عموداً مقروءاً إلى نتيجة سؤال كاملة الإحصاءات */
 function buildQuestionResult(
   column: ParsedColumn,
+  scaleMin: number,
   scaleMax: number,
   totalRespondents: number,
   isReversed: boolean
 ): QuestionResult {
   const values = isReversed
-    ? column.values.map((v) => reverseCode(v, scaleMax))
+    ? column.values.map((v) => reverseCode(v, scaleMax, scaleMin))
     : column.values;
 
   const stats = computeDescriptiveStats(values);
@@ -232,7 +237,8 @@ function buildQuestionResult(
         ? parseFloat(((stats.count / totalRespondents) * 100).toFixed(2))
         : 0,
     scaleMax,
-    distribution: computeDistribution(values, scaleMax),
+    scaleMin,
+    distribution: computeDistribution(values, scaleMax, scaleMin),
     ...(isBinary ? { isBinary: true } : {}),
     ...(isReversed ? { isReversed: true } : {}),
   };
@@ -247,6 +253,80 @@ interface ScoredColumn {
   rowValues: Array<number | null>;
 }
 
+function observedMaximum(values: number[]): number | undefined {
+  const maximum = values.reduce((current, value) =>
+    Number.isFinite(value) && value > current ? value : current
+  , -Infinity);
+  return Number.isFinite(maximum) ? maximum : undefined;
+}
+
+/**
+ * يطابق السُلَّم الوصفي مع البيانات القديمة قبل الحساب.
+ *
+ * لو كانت الإجابات الفعلية تصل إلى 5 بينما وصف السؤال يقول 3، فاستعمال 3
+ * مقاماً ينتج نسبة تتجاوز 100%. نرفع السُلَّم إلى أقرب مدى قياسي يغطي البيانات
+ * ونعلن ذلك في التقرير؛ لا نسمح للخلل الوصفي أن يتحول إلى نتيجة مستحيلة.
+ */
+function reconcileScale(
+  column: ParsedColumn,
+  configuredScale: number | undefined,
+  scaleMin: number,
+  inferredScale: number,
+  warnings: AnalysisWarning[]
+): number {
+  let scaleMax = configuredScale !== undefined && configuredScale > scaleMin
+    ? configuredScale
+    : inferredScale;
+  const maximum = observedMaximum(column.values);
+
+  if (maximum !== undefined && maximum > scaleMax) {
+    const promoted = detectScaleMax([maximum]);
+    warnings.push({
+      code: 'scale-promoted',
+      question: column.question,
+      questionNumber: column.questionNumber,
+      message:
+        `وصف السُلَّم كان ${scaleMax} بينما أعلى قيمة مرصودة ${maximum}. ` +
+        `استُخدم السُلَّم ${promoted} تلقائياً لمنع نسبة غير صحيحة.`,
+    });
+    scaleMax = promoted;
+  }
+
+  return scaleMax;
+}
+
+/** يستبعد القيم غير الصالحة بعد حسم السُلَّم ويحتفظ بمحاذاة صفوف المشاركين. */
+function sanitizeColumn(
+  column: ParsedColumn,
+  scaleMin: number,
+  scaleMax: number,
+  warnings: AnalysisWarning[]
+): ParsedColumn {
+  let invalidCount = 0;
+  const rowValues = column.rowValues.map((value) => {
+    if (value === null) return null;
+    if (Number.isFinite(value) && value >= scaleMin && value <= scaleMax) return value;
+    invalidCount += 1;
+    return null;
+  });
+
+  if (invalidCount === 0) return column;
+
+  warnings.push({
+    code: 'invalid-values-excluded',
+    question: column.question,
+    questionNumber: column.questionNumber,
+    message: `استُبعدت ${invalidCount} قيمة خارج النطاق ${scaleMin}-${scaleMax}.`,
+  });
+
+  return {
+    ...column,
+    values: rowValues.filter((value): value is number => value !== null),
+    rowValues,
+    missing: column.missing + invalidCount,
+  };
+}
+
 function reliabilityForColumns(columns: ScoredColumn[]) {
   if (columns.length < 2) return undefined;
   const rowCount = Math.max(0, ...columns.map((column) => column.rowValues.length));
@@ -259,13 +339,16 @@ function reliabilityForColumns(columns: ScoredColumn[]) {
 function computeCore(
   data: Record<string, unknown>[],
   options: ProcessOptions,
-  forcedScaleByQuestion?: Record<string, number>
+  forcedScaleByQuestion?: Record<string, number>,
+  forcedScaleMinByQuestion?: Record<string, number>
 ) {
   const totalRespondents = data.length;
   const { columns, commentGroups } = parseColumns(data, options);
 
   const reversed = new Set(options.reversedQuestions ?? []);
   const scaleByQuestion: Record<string, number> = {};
+  const scaleMinByQuestion: Record<string, number> = {};
+  const warnings: AnalysisWarning[] = [];
 
   // السُّلَّم المُستنتَج يُحسب من كل الأسئلة مجتمعةً، لا من كل سؤال على حدة.
   // الاستنتاج لكل سؤال منفرداً كان يعطي كل سؤال مقاماً مختلفاً حسب أعلى إجابة
@@ -282,23 +365,38 @@ function computeCore(
       options.scaleMaxOverride ??
       forcedScaleByQuestion?.[column.question] ??
       options.questionScaleMax?.[column.question];
-    const scaleMax = configuredScale && configuredScale > 1 ? configuredScale : inferredScale;
+    const configuredMin =
+      forcedScaleMinByQuestion?.[column.question] ??
+      options.questionScaleMin?.[column.question] ??
+      ANALYSIS_SCALE.min;
+    const scaleMin = Number.isFinite(configuredMin) && configuredMin < (configuredScale ?? inferredScale)
+      ? configuredMin
+      : ANALYSIS_SCALE.min;
+    const scaleMax = reconcileScale(column, configuredScale, scaleMin, inferredScale, warnings);
+    const validColumn = sanitizeColumn(column, scaleMin, scaleMax, warnings);
     const isReversed = reversed.has(column.question);
     scaleByQuestion[column.question] = scaleMax;
+    scaleMinByQuestion[column.question] = scaleMin;
 
     return {
-      result: buildQuestionResult(column, scaleMax, totalRespondents, isReversed),
-      rowValues: column.rowValues.map((value) =>
-        value !== null && isReversed ? reverseCode(value, scaleMax) : value
+      result: buildQuestionResult(validColumn, scaleMin, scaleMax, totalRespondents, isReversed),
+      rowValues: validColumn.rowValues.map((value) =>
+        value !== null && isReversed ? reverseCode(value, scaleMax, scaleMin) : value
       ),
     };
   });
 
   const all = scoredColumns.map((column) => column.result);
 
-  const results = all.filter((r) => !r.isBinary).sort((a, b) => a.questionNumber - b.questionNumber);
-  const binaryResults = all.filter((r) => r.isBinary).sort((a, b) => a.questionNumber - b.questionNumber);
-  const analyticColumns = scoredColumns.filter((column) => !column.result.isBinary);
+  const results = all
+    .filter((r) => !r.isBinary && r.count > 0)
+    .sort((a, b) => a.questionNumber - b.questionNumber);
+  const binaryResults = all
+    .filter((r) => r.isBinary && r.count > 0)
+    .sort((a, b) => a.questionNumber - b.questionNumber);
+  const analyticColumns = scoredColumns.filter(
+    (column) => !column.result.isBinary && column.result.count > 0
+  );
   const reliability = reliabilityForColumns(analyticColumns);
   const scaleMax =
     results.length > 0
@@ -318,7 +416,9 @@ function computeCore(
     commentGroups,
     scoredColumns: analyticColumns,
     scaleByQuestion,
+    scaleMinByQuestion,
     reliability,
+    warnings,
   };
 }
 
@@ -330,7 +430,8 @@ function computeCategoryComparison(
   data: Record<string, unknown>[],
   axes: Axis[],
   options: ProcessOptions,
-  scaleByQuestion: Record<string, number>
+  scaleByQuestion: Record<string, number>,
+  scaleMinByQuestion: Record<string, number>
 ): CategoryComparison | undefined {
   const column = options.comparisonColumn;
   if (!column || axes.length === 0) return undefined;
@@ -355,7 +456,7 @@ function computeCategoryComparison(
   };
 
   const rows = Array.from(groups.entries()).map(([category, categoryRows]) => {
-    const core = computeCore(categoryRows, scopedOptions, scaleByQuestion);
+    const core = computeCore(categoryRows, scopedOptions, scaleByQuestion, scaleMinByQuestion);
     const categoryAxes = processAxesAverages(core.results, axes);
 
     return {
@@ -398,6 +499,7 @@ export function processData(
       overallCronbachAlpha: undefined,
       cronbachRespondents: undefined,
       comparison: undefined,
+      analysisWarnings: [],
     };
   }
 
@@ -421,6 +523,12 @@ export function processData(
         }
       : axis;
   });
+  const axisWarnings: AnalysisWarning[] = axes
+    .filter((axis) => !axis.count)
+    .map((axis) => ({
+      code: 'empty-axis',
+      message: `المحور «${axis.name}» لا يطابق أي سؤال محلل.`,
+    }));
 
   return {
     results,
@@ -434,7 +542,14 @@ export function processData(
     scaleMax: core.scaleMax,
     overallCronbachAlpha: core.reliability?.alpha,
     cronbachRespondents: core.reliability?.respondents,
-    comparison: computeCategoryComparison(data, axes, options, core.scaleByQuestion),
+    comparison: computeCategoryComparison(
+      data,
+      axes,
+      options,
+      core.scaleByQuestion,
+      core.scaleMinByQuestion
+    ),
+    analysisWarnings: [...core.warnings, ...axisWarnings],
   };
 }
 
@@ -486,7 +601,11 @@ export function generateAutoComment(results: QuestionResult[], average: number, 
   const perfComment = average >= 85 ? 'أداء متميز' : average >= 70 ? 'أداء جيد' : 'أداء يحتاج إلى تحسين';
 
   // أكثر الأسئلة تشتتاً — إشارة إلى انقسام في الرأي لا يظهره المتوسط وحده
-  const mostDivisive = [...results].sort((a, b) => b.stdDev - a.stdDev)[0];
+  const normalizedDispersion = (item: QuestionResult) =>
+    item.stdDev / Math.max(1, item.scaleMax - (item.scaleMin ?? ANALYSIS_SCALE.min));
+  const mostDivisive = [...results].sort(
+    (a, b) => normalizedDispersion(b) - normalizedDispersion(a)
+  )[0];
 
   let comment = `
     <div class="detailed-analysis bg-green-50/50 border-r-4 border-green-700 p-4 rounded-xl my-4 text-gray-800 dark:text-gray-200 dark:bg-green-900/20">

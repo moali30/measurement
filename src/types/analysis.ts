@@ -36,6 +36,8 @@ export interface QuestionResult {
 
   /** السُّلَّم المستخدم في حساب هذا السؤال */
   scaleMax: number;
+  /** الحد الأدنى للسُّلَّم؛ اختياري للتوافق مع التقارير القديمة التي تبدأ من 1 */
+  scaleMin?: number;
   distribution: DistributionSlice[];
 
   /** سؤال نعم/لا — يُعرض منفصلاً ولا يدخل المتوسط العام */
@@ -66,6 +68,14 @@ export interface AnalysisOptionsSnapshot {
   reversedQuestions: string[];
   comparisonColumn?: string;
   scaleMaxOverride?: number;
+}
+
+export interface AnalysisWarning {
+  /** مفتاح ثابت يسمح للواجهة بتجميع التحذيرات أو ترجمتها لاحقاً */
+  code: 'scale-promoted' | 'invalid-values-excluded' | 'empty-axis';
+  message: string;
+  question?: string;
+  questionNumber?: number;
 }
 
 export interface ReportData {
@@ -99,6 +109,8 @@ export interface ReportData {
   overallCronbachAlpha?: number;
   cronbachRespondents?: number;
   comparison?: CategoryComparison;
+  /** تصحيحات أو استبعادات أجراها المحرك لحماية سلامة النتائج */
+  analysisWarnings?: AnalysisWarning[];
   /** الخيارات اللازمة لإعادة إنتاج التقرير عند حفظ إعداداته */
   analysisOptions?: AnalysisOptionsSnapshot;
 }

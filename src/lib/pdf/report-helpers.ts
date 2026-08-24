@@ -73,15 +73,21 @@ export function getWeightDistributionPieData(results: QuestionResult[]): Distrib
  * الأسئلة مجتمعة. يوضح ميل العينة ككل (متفائلة / محايدة / ناقدة) وهو ما لا
  * يظهره متوسط كل سؤال على حدة.
  */
-export function getResponseHistogramData(results: QuestionResult[], scaleMax: number) {
-  const totals = new Map<number, number>();
-  for (let level = 1; level <= scaleMax; level += 1) totals.set(level, 0);
+export function getResponseHistogramData(results: QuestionResult[]) {
+  const levels = ['أدنى', 'منخفض', 'متوسط', 'مرتفع', 'أعلى'] as const;
+  const totals = new Map<number, number>(levels.map((_, index) => [index, 0]));
 
   results.forEach((item) => {
     item.distribution.forEach((slice) => {
-      if (totals.has(slice.value)) {
-        totals.set(slice.value, (totals.get(slice.value) ?? 0) + slice.count);
-      }
+      // توحيد موضع الاستجابة داخل سُلَّمها يسمح بدمج السلالم الثلاثية
+      // والخماسية من دون أن تعني القيمة 3 «الحد الأعلى» و«الحياد» معاً.
+      const scaleMin = item.scaleMin ?? 1;
+      const normalizedPosition =
+        item.scaleMax > scaleMin
+          ? (slice.value - scaleMin) / (item.scaleMax - scaleMin)
+          : 0;
+      const bucket = Math.min(4, Math.max(0, Math.round(normalizedPosition * 4)));
+      totals.set(bucket, (totals.get(bucket) ?? 0) + slice.count);
     });
   });
 
@@ -90,7 +96,7 @@ export function getResponseHistogramData(results: QuestionResult[], scaleMax: nu
   return Array.from(totals.entries())
     .sort((a, b) => a[0] - b[0])
     .map(([level, count]) => ({
-      name: String(level),
+      name: levels[level],
       count,
       percentage: grandTotal > 0 ? Math.round((count / grandTotal) * 100) : 0,
     }));
@@ -137,12 +143,48 @@ export function getAxesChartData(axes: Axis[]) {
   }));
 }
 
-export function validateReportData(data: unknown): data is ReportData {
-  if (!data || typeof data !== 'object') return false;
+export function getReportValidationErrors(data: unknown): string[] {
+  if (!data || typeof data !== 'object') return ['جسم التقرير غير صالح.'];
   const candidate = data as ReportData;
-  return (
-    typeof candidate.title === 'string' &&
-    Array.isArray(candidate.results) &&
-    candidate.results.length > 0
-  );
+  const errors: string[] = [];
+
+  if (typeof candidate.title !== 'string' || !candidate.title.trim()) {
+    errors.push('عنوان التقرير مفقود.');
+  }
+  if (!Array.isArray(candidate.results) || candidate.results.length === 0) {
+    errors.push('لا توجد نتائج أسئلة قابلة للطباعة.');
+    return errors;
+  }
+
+  candidate.results.forEach((item, index) => {
+    const label = `السؤال ${item.questionNumber ?? index + 1}`;
+    const scaleMin = item.scaleMin ?? 1;
+    if (!Number.isFinite(item.scaleMax) || !Number.isFinite(scaleMin) || scaleMin >= item.scaleMax) {
+      errors.push(`${label}: حدود السُلَّم غير صالحة.`);
+      return;
+    }
+    if (!Number.isFinite(item.mean) || item.mean < scaleMin || item.mean > item.scaleMax) {
+      errors.push(`${label}: المتوسط ${item.mean} خارج السُلَّم ${scaleMin}-${item.scaleMax}.`);
+    }
+    if (!Number.isFinite(item.relativeWeight) || item.relativeWeight < 0 || item.relativeWeight > 100) {
+      errors.push(`${label}: الوزن النسبي ${item.relativeWeight}% خارج النطاق 0-100%.`);
+    }
+    if (!Number.isFinite(item.count) || item.count < 0) {
+      errors.push(`${label}: عدد الاستجابات الصالحة غير صحيح.`);
+    }
+  });
+
+  if (
+    !Number.isFinite(candidate.overallAverage) ||
+    candidate.overallAverage < 0 ||
+    candidate.overallAverage > 100
+  ) {
+    errors.push(`المتوسط العام ${candidate.overallAverage}% خارج النطاق 0-100%.`);
+  }
+
+  return errors;
+}
+
+export function validateReportData(data: unknown): data is ReportData {
+  return getReportValidationErrors(data).length === 0;
 }

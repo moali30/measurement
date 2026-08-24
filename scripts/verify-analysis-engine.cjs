@@ -48,6 +48,8 @@ function loadTypeScriptModule(filename) {
 const statistics = loadTypeScriptModule('src/lib/analysis/statistics.ts');
 const analysis = loadTypeScriptModule('src/lib/analysis-utils.ts');
 const comments = loadTypeScriptModule('src/lib/analysis/comments.ts');
+const reportHelpers = loadTypeScriptModule('src/lib/pdf/report-helpers.ts');
+const reportLayout = loadTypeScriptModule('src/lib/pdf/report-layout.ts');
 
 assert.deepEqual(statistics.computeDescriptiveStats([1, 2, 3, 4]), {
   count: 4,
@@ -61,6 +63,7 @@ assert.equal(statistics.detectScaleMax([1, 2, 4]), 5);
 assert.equal(statistics.detectScaleMax([1, 2, 6]), 7);
 assert.equal(statistics.detectScaleMax([1, 3], 5), 5);
 assert.equal(statistics.reverseCode(1, 5), 5);
+assert.equal(statistics.reverseCode(0, 10, 0), 10);
 assert.equal(statistics.computeRelativeWeight(12, 4, 4), 75);
 
 const perfectAlpha = statistics.computeCronbachAlpha([
@@ -71,6 +74,15 @@ const perfectAlpha = statistics.computeCronbachAlpha([
 ]);
 assert.equal(perfectAlpha.alpha, 1);
 assert.equal(perfectAlpha.respondents, 4);
+
+// ألفا المعياري لا يتأثر بكون بند على سُلَّم 3 وآخر على سُلَّم 5 ما داما
+// يتحركان بالنمط نفسه.
+const mixedScaleAlpha = statistics.computeCronbachAlpha([
+  [1, 1],
+  [2, 3],
+  [3, 5],
+]);
+assert.equal(mixedScaleAlpha.alpha, 1);
 
 const grouped = comments.aggregateAnswers('ملاحظات', ['لا يوجد', 'تحسين المعامل.', 'تحسين المعامل', '-']);
 assert.equal(grouped.answers.length, 1);
@@ -105,6 +117,83 @@ assert.equal(processed.axes[0].count, 2);
 assert.equal(processed.axes[0].cronbachAlpha, 1);
 assert.equal(processed.overallCronbachAlpha, 1);
 assert.equal(processed.comparison.rows.length, 2);
+
+// بيانات قديمة تصف السُلَّم بأنه 3 بينما تحمل قيماً حتى 5: يجب إصلاح المقام
+// وإصدار تحذير، ولا يجوز أن يتجاوز الوزن 100%.
+const legacyQuestion = '2. سؤال قديم بسُلَّم متعارض';
+const repairedLegacy = analysis.processData(
+  [{ [legacyQuestion]: 5 }, { [legacyQuestion]: 4 }, { [legacyQuestion]: 3 }],
+  [],
+  { [legacyQuestion]: 'likert' },
+  [],
+  { questionScaleMax: { [legacyQuestion]: 3 } }
+);
+assert.equal(repairedLegacy.results[0].scaleMax, 5);
+assert.equal(repairedLegacy.results[0].relativeWeight, 80);
+assert.equal(repairedLegacy.analysisWarnings[0].code, 'scale-promoted');
+
+const zeroBasedQuestion = '1. مقياس خطي يبدأ من صفر';
+const zeroBased = analysis.processData(
+  [{ [zeroBasedQuestion]: 0 }, { [zeroBasedQuestion]: 5 }, { [zeroBasedQuestion]: 10 }],
+  [],
+  { [zeroBasedQuestion]: 'linear_scale' },
+  [],
+  {
+    questionScaleMin: { [zeroBasedQuestion]: 0 },
+    questionScaleMax: { [zeroBasedQuestion]: 10 },
+  }
+);
+assert.equal(zeroBased.results[0].scaleMin, 0);
+assert.equal(zeroBased.results[0].mean, 5);
+assert.equal(zeroBased.results[0].relativeWeight, 50);
+
+// السُلَّم الثلاثي الحقيقي يبقى ثلاثياً عندما تكون خريطة البدائل 3،2،1.
+assert.equal(processed.results[0].relativeWeight, 66.67);
+assert.ok(processed.results.every((item) => item.relativeWeight <= 100));
+
+const validReport = {
+  title: 'تقرير تحقق', reportDate: '2026-08-24', surveyDate: '2026-08-01',
+  results: repairedLegacy.results,
+  resultsForAnalysis: repairedLegacy.resultsForAnalysis,
+  overallAverage: repairedLegacy.overallAverage,
+  axes: [], autoComment: '', manualComment: '',
+  logos: { quality: '', university: '', college: '' }, signatures: [],
+};
+assert.equal(reportHelpers.validateReportData(validReport), true);
+assert.equal(
+  reportHelpers.validateReportData({
+    ...validReport,
+    results: [{ ...validReport.results[0], relativeWeight: 126 }],
+  }),
+  false
+);
+
+const compactProfile = reportLayout.getReportLayoutProfile({
+  ...validReport,
+  results: Array.from({ length: 60 }, (_, index) => ({
+    ...validReport.results[0], questionNumber: index + 1, question: `سؤال طويل ${index}`,
+  })),
+});
+assert.equal(compactProfile.density, 'compact');
+const compactCommentsProfile = reportLayout.getReportLayoutProfile({
+  ...validReport,
+  results: Array.from({ length: 60 }, (_, index) => ({
+    ...validReport.results[0], questionNumber: index + 1, question: `سؤال ${index}`,
+  })),
+  comments: [{
+    question: 'تعليقات', totalResponses: 3, skippedCount: 0,
+    answers: [{ text: 'تعليق قصير قابل للتوزيع.', occurrences: 1 }],
+  }],
+});
+assert.equal(compactCommentsProfile.commentColumns, 3);
+const longCommentProfile = reportLayout.getReportLayoutProfile({
+  ...validReport,
+  comments: [{
+    question: 'تعليقات', totalResponses: 1, skippedCount: 0,
+    answers: [{ text: 'ن'.repeat(500), occurrences: 1 }],
+  }],
+});
+assert.equal(longCommentProfile.commentColumns, 1);
 
 // عمود نصي لم يختره المستخدم في قائمة التعليقات يخرج من التقرير بالكامل —
 // لا يُحسب كمياً ولا يُطبع كتعليق. أسماء المشاركين كانت تُطبع رغم إزالة علامة الصح.

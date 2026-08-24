@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateAnalysisPdf } from '@/lib/pdf/generate-analysis-pdf';
 import { PDF_CONFIG } from '@/lib/pdf/config';
-import { validateReportData } from '@/lib/pdf/report-helpers';
+import { getReportValidationErrors, validateReportData } from '@/lib/pdf/report-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,8 +20,9 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     if (!validateReportData(body)) {
+      const details = getReportValidationErrors(body);
       return NextResponse.json(
-        { error: 'بيانات التقرير غير صالحة أو فارغة' },
+        { error: `بيانات التقرير غير صالحة: ${details.slice(0, 3).join(' ')}` },
         { status: 400 }
       );
     }

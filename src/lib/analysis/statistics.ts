@@ -67,8 +67,12 @@ export function detectScaleMax(values: number[], override?: number): number {
 }
 
 /** يعكس ترميز سؤال عكسي: أفضل إجابة تصبح أعلى قيمة */
-export function reverseCode(value: number, scaleMax: number): number {
-  return ANALYSIS_SCALE.min + scaleMax - value;
+export function reverseCode(
+  value: number,
+  scaleMax: number,
+  scaleMin: number = ANALYSIS_SCALE.min
+): number {
+  return scaleMin + scaleMax - value;
 }
 
 export function computeDescriptiveStats(values: number[]): DescriptiveStats {
@@ -111,19 +115,36 @@ export function computeDescriptiveStats(values: number[]): DescriptiveStats {
   };
 }
 
-/** تباين العينة؛ صفر عند عدم كفاية القيم */
-function sampleVariance(values: number[]): number {
+/** انحراف العينة؛ صفر عند عدم كفاية القيم أو انعدام التباين */
+function sampleStdDev(values: number[]): number {
   if (values.length < 2) return 0;
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  return values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1);
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
+function pearsonCorrelation(a: number[], b: number[]): number | undefined {
+  if (a.length !== b.length || a.length < 2) return undefined;
+  const meanA = a.reduce((sum, value) => sum + value, 0) / a.length;
+  const meanB = b.reduce((sum, value) => sum + value, 0) / b.length;
+  const sdA = sampleStdDev(a);
+  const sdB = sampleStdDev(b);
+  if (sdA === 0 || sdB === 0) return undefined;
+
+  const covariance = a.reduce(
+    (sum, value, index) => sum + (value - meanA) * (b[index] - meanB),
+    0
+  ) / (a.length - 1);
+  return covariance / (sdA * sdB);
 }
 
 /**
- * يحسب ألفا كرونباخ من مصفوفة «مشارك × سؤال».
+ * يحسب ألفا كرونباخ المعياري من مصفوفة «مشارك × سؤال».
  *
  * نستخدم الحذف القائمي: لا تدخل إلا الصفوف المكتملة على جميع بنود المجموعة،
- * لأن مزج أحجام عينات مختلفة بين تباينات البنود وتباين المجموع ينتج معاملاً
- * غير متسق. لا نعيد قيمة إذا تعذر الحساب رياضياً.
+ * ثم نحسب متوسط الارتباطات البينية وصيغة ألفا المعيارية. هذه الصيغة لا تجعل
+ * البند الخماسي أثقل من البند الثلاثي لمجرد اتساع مداه. لا نعيد قيمة إذا انعدم
+ * تباين أي بند أو تعذر الحساب رياضياً.
  */
 export function computeCronbachAlpha(
   rows: Array<Array<number | null>>
@@ -137,16 +158,23 @@ export function computeCronbachAlpha(
   );
   if (complete.length < 2) return undefined;
 
-  const itemVariances = Array.from({ length: items }, (_, itemIndex) =>
-    sampleVariance(complete.map((row) => row[itemIndex]))
+  const columns = Array.from({ length: items }, (_, itemIndex) =>
+    complete.map((row) => row[itemIndex])
   );
-  const totals = complete.map((row) => row.reduce((sum, value) => sum + value, 0));
-  const totalVariance = sampleVariance(totals);
-  if (totalVariance <= 0) return undefined;
+  const correlations: number[] = [];
+  for (let left = 0; left < items; left += 1) {
+    for (let right = left + 1; right < items; right += 1) {
+      const correlation = pearsonCorrelation(columns[left], columns[right]);
+      if (correlation === undefined) return undefined;
+      correlations.push(correlation);
+    }
+  }
 
-  const alpha =
-    (items / (items - 1)) *
-    (1 - itemVariances.reduce((sum, variance) => sum + variance, 0) / totalVariance);
+  if (correlations.length === 0) return undefined;
+  const averageCorrelation = correlations.reduce((sum, value) => sum + value, 0) / correlations.length;
+  const denominator = 1 + (items - 1) * averageCorrelation;
+  if (denominator === 0) return undefined;
+  const alpha = (items * averageCorrelation) / denominator;
 
   if (!Number.isFinite(alpha)) return undefined;
   return { alpha: round2(alpha), respondents: complete.length, items };
@@ -156,16 +184,20 @@ export function computeCronbachAlpha(
  * التوزيع التكراري على مستويات السُّلَّم.
  * القيم غير الصحيحة (متوسطات مستوردة مثلاً) تُقرَّب لأقرب مستوى حتى لا تختفي.
  */
-export function computeDistribution(values: number[], scaleMax: number): DistributionSlice[] {
+export function computeDistribution(
+  values: number[],
+  scaleMax: number,
+  scaleMin: number = ANALYSIS_SCALE.min
+): DistributionSlice[] {
   const total = values.length;
   const counts = new Map<number, number>();
 
-  for (let level = ANALYSIS_SCALE.min; level <= scaleMax; level += 1) {
+  for (let level = scaleMin; level <= scaleMax; level += 1) {
     counts.set(level, 0);
   }
 
   values.forEach((value) => {
-    const level = Math.min(scaleMax, Math.max(ANALYSIS_SCALE.min, Math.round(value)));
+    const level = Math.min(scaleMax, Math.max(scaleMin, Math.round(value)));
     counts.set(level, (counts.get(level) ?? 0) + 1);
   });
 

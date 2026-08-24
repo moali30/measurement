@@ -70,6 +70,7 @@ export default function AnalysisPage() {
         comparisonColumn: engineOptions?.comparisonColumn,
         scaleMaxOverride: engineOptions?.scaleMaxOverride,
         questionScaleMax: engineOptions?.questionScaleMax,
+        questionScaleMin: engineOptions?.questionScaleMin,
         questionValueMaps: engineOptions?.questionValueMaps,
       });
 
@@ -82,6 +83,16 @@ export default function AnalysisPage() {
             .map((axis) => `«${axis.name}»`)
             .join('، ')} — راجع نطاق أرقام الأسئلة.`,
           { duration: 8000 }
+        );
+      }
+
+      const repairedScales = (processed.analysisWarnings ?? []).filter(
+        (warning) => warning.code === 'scale-promoted' || warning.code === 'invalid-values-excluded'
+      );
+      if (repairedScales.length > 0) {
+        toast.warning(
+          `راجع سلامة السلالم: أجرى المحرك ${repairedScales.length} تصحيحاً موثقاً داخل التقرير لمنع نتائج غير منطقية.`,
+          { duration: 10000 }
         );
       }
 

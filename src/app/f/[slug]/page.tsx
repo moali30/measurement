@@ -350,8 +350,14 @@ export default function PublicFormPage({ params }: { params: { slug: string } })
 
                 {/* Likert */}
                 {q.type === "likert" && (
-                  <div className="grid grid-cols-5 gap-2">
-                    {["موافق جداً", "موافق", "محايد", "غير موافق", "غير موافق جداً"].map((opt, i) => (
+                  <div
+                    className="grid gap-2"
+                    style={{ gridTemplateColumns: `repeat(${Math.max(2, q.options?.length || 5)}, minmax(0, 1fr))` }}
+                  >
+                    {(q.options?.length > 1
+                      ? q.options
+                      : ["موافق جداً", "موافق", "محايد", "غير موافق", "غير موافق جداً"]
+                    ).map((opt, i) => (
                       <label key={i} className={`flex flex-col items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-center ${answers[q.$id] === opt ? 'border-blue-400 bg-blue-50/50' : 'border-gray-100 hover:border-gray-200'}`}>
                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${answers[q.$id] === opt ? 'border-blue-500' : 'border-gray-300'}`}>
                           {answers[q.$id] === opt && <div className="w-2.5 h-2.5 rounded-full bg-blue-500"/>}

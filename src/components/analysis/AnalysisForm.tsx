@@ -15,6 +15,7 @@ export interface AnalysisEngineOptions {
   comparisonColumn?: string;
   scaleMaxOverride?: number;
   questionScaleMax?: Record<string, number>;
+  questionScaleMin?: Record<string, number>;
   questionValueMaps?: Record<string, Record<string, number>>;
 }
 
@@ -71,6 +72,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   const [comparisonColumn, setComparisonColumn] = useState('');
   const [scaleMaxOverride, setScaleMaxOverride] = useState('');
   const [questionScaleMax, setQuestionScaleMax] = useState<Record<string, number>>({});
+  const [questionScaleMin, setQuestionScaleMin] = useState<Record<string, number>>({});
   const [questionValueMaps, setQuestionValueMaps] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
@@ -181,6 +183,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         const rawData: Record<string, unknown>[] = [];
         const qTypes: Record<string, string> = {};
         const qScales: Record<string, number> = {};
+        const qScaleMins: Record<string, number> = {};
         const qValueMaps: Record<string, Record<string, number>> = {};
         const filterableCols: {column: string, values: string[]}[] = [];
         
@@ -203,17 +206,30 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
             const key = questionKey(q);
             qTypes[key] = q.type as string;
             const explicitMax = Number(q.maxValue);
+            const explicitMin = Number(q.minValue);
             const optionLabels = Array.isArray(q.options)
               ? q.options.map((option) => String(option).trim()).filter(Boolean)
               : [];
             const optionsCount = optionLabels.length;
-            if (Number.isFinite(explicitMax) && explicitMax > 1) {
-              qScales[key] = explicitMax;
-            } else if (q.type === 'likert' && optionsCount > 1) {
+            // في أسئلة ليكرت، البدائل التي يراها المشارك هي مصدر الحقيقة.
+            // maxValue قد يبقى من نوع سؤال سابق أو من نموذج قديم، وتفضيله على
+            // عدد البدائل كان يجعل خمس إجابات تُحلل على سُلَّم من ثلاث درجات.
+            if (q.type === 'likert' && optionsCount > 1) {
               qScales[key] = optionsCount;
+              qScaleMins[key] = 1;
               qValueMaps[key] = Object.fromEntries(
                 optionLabels.map((option, index) => [option, optionsCount - index])
               );
+            } else if (
+              Number.isFinite(explicitMax) &&
+              Number.isFinite(explicitMin) &&
+              explicitMax > explicitMin
+            ) {
+              qScales[key] = explicitMax;
+              qScaleMins[key] = explicitMin;
+            } else if (Number.isFinite(explicitMax) && explicitMax > 1) {
+              qScales[key] = explicitMax;
+              qScaleMins[key] = 1;
             }
             if (['radio', 'select', 'dropdown', 'multiple_choice'].includes(q.type as string)) {
                 filterableCols.push({ column: key, values: [] });
@@ -247,6 +263,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         setLoadedRawData(rawData);
         setQuestionTypes(qTypes);
         setQuestionScaleMax(qScales);
+        setQuestionScaleMin(qScaleMins);
         setQuestionValueMaps(qValueMaps);
         setAvailableFilters(filterableCols.filter(f => f.values.length > 0));
         setActiveFilters({});
@@ -316,6 +333,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                 setLoadedRawData(rawData);
                 setQuestionTypes({});
                 setQuestionScaleMax({});
+                setQuestionScaleMin({});
                 setQuestionValueMaps({});
                 setAvailableFilters(filterableCols);
                 setActiveFilters({});
@@ -506,6 +524,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       reversedQuestions,
       scaleMaxOverride: scaleMaxOverride ? Number(scaleMaxOverride) : undefined,
       questionScaleMax,
+      questionScaleMin,
       questionValueMaps,
       // عمود المقارنة لا معنى له لو صُفّي إلى قيمة واحدة
       comparisonColumn:

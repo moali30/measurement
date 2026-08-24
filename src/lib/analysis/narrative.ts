@@ -19,7 +19,8 @@ export function generateAxisComment(average: number): string {
  * المتخصص، فنترجمه إلى حكم لفظي على مقياس من خمس درجات.
  */
 export function describeDispersion(stdDev: number, scaleMax: number): string {
-  const ratio = scaleMax > 0 ? stdDev / scaleMax : 0;
+  const scaleRange = Math.max(1, scaleMax - 1);
+  const ratio = stdDev / scaleRange;
   if (ratio < 0.12) return 'إجماع واضح بين المشاركين';
   if (ratio < 0.2) return 'اتفاق جيد مع تباين محدود';
   if (ratio < 0.28) return 'تباين ملحوظ في الآراء';

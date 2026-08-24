@@ -1,11 +1,31 @@
 /* Print-optimized styles for analysis report PDF generation */
 
 .print-document {
+  --print-section-gap: 6mm;
+  --print-card-gap: 3mm;
+  --print-card-padding: 4mm;
+  --print-table-y: 2mm;
   background: #ffffff;
   color: #111111;
-  font-size: 11pt;
-  line-height: 1.55;
+  font-size: 10.5pt;
+  line-height: 1.5;
   direction: rtl;
+}
+
+.print-layout--spacious {
+  --print-section-gap: 8mm;
+  --print-card-gap: 4mm;
+  --print-card-padding: 5mm;
+  --print-table-y: 2.4mm;
+}
+
+.print-layout--compact {
+  --print-section-gap: 4mm;
+  --print-card-gap: 2mm;
+  --print-card-padding: 3mm;
+  --print-table-y: 1.5mm;
+  font-size: 9.6pt;
+  line-height: 1.42;
 }
 
 .print-document--preview {
@@ -31,14 +51,14 @@
    الصفحات شبه الفارغة: القسم لا يستطيع الانقسام فيُدفع بأكمله إلى
    صفحة جديدة تاركاً ما قبله بياضاً.
 
-   ارتفاع منطقة المحتوى = 297mm − 30mm (رأس) − 20mm (تذييل) ≈ 247mm.
+   ارتفاع منطقة المحتوى = 297mm − 30mm (رأس) − 26mm (تذييل) = 241mm.
    أي عنصر ذرّي أطول من ذلك سيفيض حتماً؛ لا تجعله ذرّياً.
    ============================================================ */
 
 .print-section {
   break-inside: auto;
   page-break-inside: auto;
-  margin-bottom: 8mm;
+  margin-bottom: var(--print-section-gap);
 }
 
 /* مُبقى كعلامة صريحة على أن القسم يتدفّق عمداً */
@@ -49,6 +69,13 @@
 
 /* يبدأ القسم في صفحة جديدة — التقرير الرسمي يفصل أقسامه الكبرى */
 .print-section--page {
+  break-before: page;
+  page-break-before: always;
+}
+
+/* يضيفه report-layout.ts بعد قياس الخطوط والمحتوى. لا ينقل القسم إلا إذا
+   عجزت بقية الصفحة عن حمل العنوان والوحدة الأولى معاً. */
+.print-section--smart-break {
   break-before: page;
   page-break-before: always;
 }
@@ -170,7 +197,7 @@
 .print-section-title {
   font-family: var(--font-amiri), 'Amiri', 'Traditional Arabic', serif;
   text-align: center;
-  margin: 0 0 5mm;
+  margin: 0 0 3.5mm;
   font-size: 16pt;
   color: #1a237e;
   border-bottom: 2px solid #1a237e;
@@ -227,22 +254,23 @@
 /* ===== الملخص التنفيذي ===== */
 
 .print-kpi-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4mm;
-  margin-bottom: 6mm;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--print-card-gap);
+  margin-bottom: 4mm;
+  break-inside: auto;
+  page-break-inside: auto;
 }
 
 .print-kpi-card {
-  flex: 1 1 40%;
-  min-width: 60mm;
-  padding: 5mm;
+  min-width: 0;
+  padding: var(--print-card-padding);
   border: 1.5px solid #c5cae9;
   border-radius: 8px;
   background: #fafbff;
   text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .print-kpi-card__label {
@@ -253,7 +281,7 @@
 }
 
 .print-kpi-card__value {
-  font-size: 20pt;
+  font-size: 18pt;
   font-weight: 700;
   color: #1a237e;
   line-height: 1.2;
@@ -281,28 +309,68 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 10.5pt;
+  font-size: 9.35pt;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.5mm;
 }
 
 .print-method-list li {
-  display: flex;
-  gap: 4mm;
-  padding: 3mm 0;
-  border-bottom: 1px solid #eceef8;
+  display: block;
+  padding: 3mm;
+  border: 1px solid #e0e3f2;
+  border-right: 3px solid #3949ab;
+  border-radius: 5px;
+  background: #fafbff;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
 .print-method-list dt,
 .print-method-list .term {
-  flex: 0 0 42mm;
+  display: block;
   font-weight: 700;
   color: #1a237e;
+  margin-bottom: 1mm;
 }
 
 .print-method-list .desc {
-  flex: 1;
-  line-height: 1.7;
+  display: block;
+  line-height: 1.55;
+}
+
+.print-method-summary {
+  margin-bottom: 3mm;
+  padding: 2.5mm 3mm;
+  border-radius: 5px;
+  background: #e8eaf6;
+  color: #1a237e;
+  text-align: center;
+  font-size: 9.2pt;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.print-data-warning {
+  margin-bottom: 3mm;
+  padding: 3mm 4mm;
+  border: 1px solid #ef9a9a;
+  border-right: 4px solid #c62828;
+  border-radius: 5px;
+  background: #fff7f7;
+  font-size: 9.2pt;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.print-data-warning h4 {
+  margin: 0 0 1.5mm;
+  color: #b71c1c;
+}
+
+.print-data-warning ul {
+  margin: 0;
+  padding-right: 5mm;
 }
 
 .print-formula {
@@ -313,8 +381,8 @@
   border: 1px solid #dddddd;
   border-radius: 4px;
   padding: 2mm 4mm;
-  display: inline-block;
-  margin-top: 1mm;
+  display: block;
+  margin-top: 1.5mm;
 }
 
 .print-table {
@@ -338,7 +406,7 @@
 }
 
 .print-table td {
-  padding: 3mm 2mm;
+  padding: var(--print-table-y) 1.8mm;
   border: 1px solid #dddddd;
   vertical-align: middle;
   /* نصوص الأسئلة الطويلة يجب أن تلتف لا أن تمدّ الجدول خارج الصفحة */
@@ -359,7 +427,7 @@
 }
 
 .print-table--results td {
-  padding: 2mm 1.6mm;
+  padding: var(--print-table-y) 1.4mm;
 }
 
 .print-table tbody tr:nth-child(even) td {
@@ -402,15 +470,15 @@
 .print-kpi {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 6mm 0;
-  padding: 6mm;
+  margin: 3mm 0;
+  padding: 3.5mm 5mm;
   background: #e8eaf6;
   border: 2px solid #1a237e;
   border-radius: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 14pt;
+  font-size: 12.5pt;
   font-weight: 700;
 }
 
@@ -424,15 +492,25 @@
 .print-chart-block {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 8mm 0;
+  margin: 0;
+  padding: 3mm 2mm;
+  border: 1px solid #e0e3f2;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.print-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--print-card-gap);
 }
 
 .print-chart-block h3,
 .print-chart-block h4 {
-  margin: 0 0 4mm;
+  margin: 0 0 2mm;
   text-align: center;
   color: #1a237e;
-  font-size: 13pt;
+  font-size: 10.5pt;
 }
 
 .print-chart-wrap {
@@ -446,17 +524,17 @@
   text-align: center;
   font-size: 9pt;
   color: #666666;
-  margin: -2mm 0 3mm;
+  margin: -1mm 0 1mm;
 }
 
 /* ===== الحلقة ووسيلة إيضاحها جنباً إلى جنب ===== */
 
 .print-donut {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8mm;
-  flex-wrap: wrap;
+  gap: 1mm;
   direction: rtl;
 }
 
@@ -469,21 +547,20 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  flex: 1 1 70mm;
-  min-width: 60mm;
-  max-width: 90mm;
+  width: 100%;
+  max-width: none;
 }
 
 .print-donut__legend li {
   display: flex;
   align-items: center;
   gap: 3mm;
-  padding: 2.5mm 3mm;
+  padding: 1.2mm 2mm;
   border: 1px solid #e0e3f2;
   border-radius: 5px;
-  margin-bottom: 2mm;
+  margin-bottom: 1mm;
   background: #fafbff;
-  font-size: 10pt;
+  font-size: 8.7pt;
 }
 
 .print-donut__legend li:last-child {
@@ -589,6 +666,9 @@
   line-height: 1.8;
   orphans: 3;
   widows: 3;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--print-card-gap);
 }
 
 .print-narrative h4,
@@ -604,11 +684,15 @@
   page-break-inside: auto;
   orphans: 3;
   widows: 3;
-  margin-bottom: 6mm;
-  padding: 6mm;
+  margin-bottom: 0;
+  padding: var(--print-card-padding);
   border: 1px solid #c5cae9;
   border-radius: 6px;
   background: #fafafa;
+}
+
+.print-narrative-box--wide {
+  grid-column: 1 / -1;
 }
 
 /* المجموعة تتدفق عبر الصفحات — منع الكسر كان يقفز بمجموعة طويلة إلى صفحة
@@ -634,14 +718,15 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  columns: 2;
-  column-gap: 6mm;
+  display: grid;
+  grid-template-columns: repeat(var(--print-comment-columns, 2), minmax(0, 1fr));
+  gap: 2mm;
 }
 
 .print-comment-group li {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 0 0 2mm;
+  margin: 0;
   padding: 2mm 3mm;
   background: #fafbff;
   border: 1px solid #e0e3f2;
@@ -655,6 +740,8 @@
   font-size: 9pt;
   color: #666666;
   margin-bottom: 3mm;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 /* عدّاد التكرار بجوار الإجابة المتكررة */
