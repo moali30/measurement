@@ -5,6 +5,7 @@ import {
   LevelCounts,
   VALUE_MAP,
   analyseSingle,
+  choiceAt,
   analyseSurvey,
   buildSurvey,
   rowsFor,
@@ -133,6 +134,36 @@ describe('حراسة السُّلَّم — قرار معلن لا قيمة تُ
     });
     expect(result.analysisErrors[0].message).toContain('المحاضر يشرح بوضوح');
     expect(result.analysisErrors[0].message).toContain('التعليقات');
+  });
+
+  it('عمود ترقيم أو تاريخ في ملف مصدَّر يُستبعد ولا يوقف التقرير', () => {
+    // ملف النتائج المصدَّر يحمل ترقيماً وتاريخاً دائماً؛ رفض التقرير بسببهما
+    // كان يجعل كل ملف تصدير غير قابل للتحليل.
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      '#': index + 1,
+      التاريخ: 46195.5 + index,
+      [QUESTION]: choiceAt([8, 6, 4, 2, 0], index),
+    }));
+    const result = processData(rows, [], undefined, undefined, {});
+
+    expect(result.analysisErrors).toEqual([]);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].question).toBe(QUESTION);
+    expect(result.analysisWarnings.map((warning) => warning.question).sort()).toEqual([
+      '#',
+      'التاريخ',
+    ]);
+  });
+
+  it('سؤال ليكرت معلن بقيمة واحدة فاسدة يوقف التقرير ولا يُستبعد', () => {
+    // الإعلان يقين: قيمة شاذة داخل بند قياس خللٌ في البيانات لا عمود دخيل
+    const rows = rowsFor(QUESTION, [8, 6, 4, 2, 0]);
+    rows[0] = { [QUESTION]: 9 };
+    const result = processData(rows, [], { [QUESTION]: 'likert' }, [], {
+      questionOptionCounts: { [QUESTION]: 5 },
+      questionValueMaps: { [QUESTION]: VALUE_MAP },
+    });
+    expect(result.analysisErrors.map((error) => error.code)).toEqual(['values-out-of-scale']);
   });
 
   it('بيانات بلا بند ليكرت واحد ترفض التحليل', () => {

@@ -66,6 +66,19 @@ const EXCLUDED_TYPES = ['rating', 'linear_scale', 'number', 'date', 'file', 'mat
 
 const TEXT_TYPES = ['text', 'textarea'];
 
+/**
+ * أقصى نسبة قيم خارج المقياس يحتملها عمود قبل أن نحكم بأنه ليس سؤال ليكرت.
+ *
+ * ملف النتائج المصدَّر يحمل عمود ترقيم وعمود تاريخ. أرقام الترقيم تتجاوز
+ * الخمسة، وقيم التاريخ أرقام تسلسلية كبيرة، فكان رفض التقرير بسببهما يجعل كل
+ * ملف تصدير غير قابل للتحليل. والتمييز بسيط: سؤال ليكرت فيه قيم فاسدة تبقى
+ * أغلب قيمه صالحة، أما عمود ليس سؤالاً فأغلب قيمه خارج المقياس أو كلها.
+ *
+ * لا ينطبق هذا على عمود أُعلن نوعه `likert` في النموذج: الإعلان يقين، فأي قيمة
+ * خارج المقياس فيه خلل في البيانات يوقف التقرير.
+ */
+const MAX_OUT_OF_SCALE_SHARE = 0.2;
+
 /** أقصى عدد فئات يجعل عموداً نصياً في ملف Excel متغيراً ديموغرافياً لا تعليقاً */
 const MAX_DEMOGRAPHIC_CATEGORIES = 12;
 const MAX_DEMOGRAPHIC_LABEL_LENGTH = 40;
@@ -98,6 +111,8 @@ interface ParsedData {
   columns: ParsedColumn[];
   commentGroups: { question: string; answers: string[] }[];
   demographics: SampleProfileGroup[];
+  /** أعمدة رقمية استُبعدت لأنها ليست أسئلة ليكرت أصلاً */
+  nonQuestionColumns: string[];
 }
 
 export interface ProcessResult {
@@ -161,6 +176,7 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
   const columns: ParsedColumn[] = [];
   const commentGroups: { question: string; answers: string[] }[] = [];
   const demographics: SampleProfileGroup[] = [];
+  const nonQuestionColumns: string[] = [];
 
   // قائمة أسئلة التعليقات تصل من واجهة مربّعات اختيار تعرض كل الأعمدة،
   // فوجودها — حتى فارغة — يعني أن المستخدم حسم أمر كل عمود.
@@ -251,6 +267,13 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
     });
 
     if (values.length > 0 || outOfScale.length > 0) {
+      const declaredLikert = qType === LIKERT_TYPE;
+      const outOfScaleShare = outOfScale.length / (values.length + outOfScale.length);
+      if (!declaredLikert && outOfScaleShare > MAX_OUT_OF_SCALE_SHARE) {
+        nonQuestionColumns.push(question);
+        return;
+      }
+
       columns.push({
         question,
         questionNumber: questionNumberFrom(question, index),
@@ -279,7 +302,7 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
     }
   });
 
-  return { columns, commentGroups, demographics };
+  return { columns, commentGroups, demographics, nonQuestionColumns };
 }
 
 /** يحوّل عموداً مقروءاً إلى نتيجة سؤال كاملة الإحصاءات على السُّلَّم الخماسي */
@@ -390,20 +413,33 @@ function collectErrors(columns: ParsedColumn[], options: ProcessOptions): Analys
 }
 
 /** استبعادات موثقة داخل التقرير لا توقفه */
-function collectExclusionWarnings(options: ProcessOptions): AnalysisWarning[] {
+function collectExclusionWarnings(
+  options: ProcessOptions,
+  nonQuestionColumns: string[]
+): AnalysisWarning[] {
   const types = options.questionTypes ?? {};
-  return Object.entries(types)
-    .filter(
-      ([question, type]) =>
-        EXCLUDED_TYPES.includes(type) && !options.commentQuestions?.includes(question)
-    )
-    .map(([question]) => ({
-      code: 'question-excluded' as const,
-      question,
-      message:
-        `استُبعد «${stripNumberPrefix(question)}» من التحليل الكمي لأنه ليس سؤال ليكرت خماسياً؛ ` +
-        `المتوسط العام يقتصر على بنود ${ANALYSIS_SCALE.label}.`,
-    }));
+  const numericExclusions: AnalysisWarning[] = nonQuestionColumns.map((question) => ({
+    code: 'question-excluded' as const,
+    question,
+    message:
+      `استُبعد العمود «${stripNumberPrefix(question)}» لأن أغلب قيمه خارج المقياس ` +
+      `${ANALYSIS_SCALE.min}-${ANALYSIS_SCALE.max}، فهو ليس بند قياس.`,
+  }));
+
+  return numericExclusions.concat(
+    Object.entries(types)
+      .filter(
+        ([question, type]) =>
+          EXCLUDED_TYPES.includes(type) && !options.commentQuestions?.includes(question)
+      )
+      .map(([question]) => ({
+        code: 'question-excluded' as const,
+        question,
+        message:
+          `استُبعد «${stripNumberPrefix(question)}» من التحليل الكمي لأنه ليس سؤال ليكرت خماسياً؛ ` +
+          `المتوسط العام يقتصر على بنود ${ANALYSIS_SCALE.label}.`,
+      }))
+  );
 }
 
 /**
@@ -412,7 +448,7 @@ function collectExclusionWarnings(options: ProcessOptions): AnalysisWarning[] {
  */
 function computeCore(data: Record<string, unknown>[], options: ProcessOptions) {
   const totalRespondents = data.length;
-  const { columns, commentGroups, demographics } = parseColumns(data, options);
+  const { columns, commentGroups, demographics, nonQuestionColumns } = parseColumns(data, options);
   const reversed = new Set(options.reversedQuestions ?? []);
 
   const scoredColumns: ScoredColumn[] = columns
@@ -447,6 +483,7 @@ function computeCore(data: Record<string, unknown>[], options: ProcessOptions) {
     totalRespondents,
     commentGroups,
     demographics,
+    nonQuestionColumns,
     scoredColumns,
     reliability,
   };
@@ -599,7 +636,10 @@ export function processData(
     // التوصيات تُبنى أخيراً لأنها تقرأ كل ما سبق: البنود والمحاور والمقارنة
     // والتعليقات معاً. بناؤها داخل الحساب كان سيجعلها ترى نصف الصورة.
     recommendations: buildRecommendations(summary as unknown as ReportData),
-    analysisWarnings: [...collectExclusionWarnings(options), ...axisWarnings],
+    analysisWarnings: [
+      ...collectExclusionWarnings(options, core.nonQuestionColumns),
+      ...axisWarnings,
+    ],
     analysisErrors: [],
   };
 }
