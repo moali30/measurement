@@ -18,7 +18,6 @@ import type { ReportData } from '@/types/analysis';
 import { DISTRIBUTION_BANDS, NARRATIVE_THRESHOLDS } from './scale';
 import {
   Finding,
-  FINDING_THRESHOLDS,
   FindingEvidence,
   FindingKind,
   collectFindings,
@@ -175,48 +174,50 @@ function buildTarget(evidence: FindingEvidence): string {
 
 /**
  * يبني المبرر من الأدلة الرقمية وحدها.
- * كل رقم هنا مأخوذ حرفياً من `evidence`، فلا يمكن أن يظهر رقم بلا أصل.
+ *
+ * تقييم لا شرح: كل جملة تسمّي الموضع وتذكر أرقامه وتقف. الصيغ السابقة كانت
+ * تضيف دلالة الرقم («لا يكشف هذا الانقسام»، «يبدو مقبولاً»، «أضعف دلالة مما
+ * يبدو») — وهو تفسير يخص قارئ التقرير لا مُصدِره، ويطيل السطر بلا رقم جديد.
+ *
+ * وكل رقم هنا مأخوذ حرفياً من `evidence`، فلا يمكن أن يظهر رقم بلا أصل.
  */
 function buildRationale(bucket: Bucket, questionNumbers: number[]): RationaleParts {
   const worst = bucket.primary;
   const evidence = worst.evidence;
+  const scope = listQuestions(questionNumbers);
 
   switch (worst.kind) {
     case 'critical-weakness':
     case 'weakness': {
       const weight = evidence.relativeWeight ?? 0;
-      const scope =
+      const lead =
         questionNumbers.length > 1
-          ? `${listQuestions(questionNumbers)} دون عتبة ${NARRATIVE_THRESHOLDS.weakness}%، وأدناها ${weight}%`
-          : `${listQuestions(questionNumbers)} بوزن نسبي ${weight}%`;
+          ? `${scope}: أدنى وزن نسبي ${weight}%`
+          : `${scope}: الوزن النسبي ${weight}%`;
       const tail =
         evidence.negativeShare && evidence.negativeShare > 0
-          ? `، ولم يوافق عليها ${evidence.negativeShare}% من المشاركين`
+          ? `، وغير الموافقين ${evidence.negativeShare}%`
           : '';
-      return { text: `${scope}${tail}.` };
+      return { text: `${lead}${tail}.` };
     }
 
-    case 'polarization': {
+    case 'polarization':
       return {
         text:
-          `${listQuestions(questionNumbers)} انقسم الرأي حولها: ` +
-          `${evidence.negativeShare}% غير موافقين مقابل ${evidence.positiveShare}% موافقين، ` +
-          `والوزن النسبي ${evidence.relativeWeight}% لا يكشف هذا الانقسام.`,
+          `${scope}: ${evidence.negativeShare}% غير موافقين مقابل ` +
+          `${evidence.positiveShare}% موافقين، والوزن النسبي ${evidence.relativeWeight}%.`,
       };
-    }
 
-    case 'negative-tail': {
+    case 'negative-tail':
       return {
-        text:
-          `${listQuestions(questionNumbers)} يرفضها ${evidence.negativeShare}% من المشاركين ` +
-          `رغم أن وزنها النسبي ${evidence.relativeWeight}% يبدو مقبولاً.`,
+        text: `${scope}: غير الموافقين ${evidence.negativeShare}%، والوزن النسبي ${evidence.relativeWeight}%.`,
       };
-    }
 
     case 'axis-weakness': {
       const names = bucket.primaryGroup.map((finding) => `«${finding.axisName}»`).join('، ');
+      const label = bucket.primaryGroup.length > 1 ? 'محاور' : 'محور';
       return {
-        text: `متوسط ${names} ${evidence.axisAverage}% وهو دون عتبة ${FINDING_THRESHOLDS.axisWeakness}%، محسوباً على ${itemsLabel(evidence.items ?? 0)}.`,
+        text: `${label} ${names}: المتوسط ${evidence.axisAverage}% على ${itemsLabel(evidence.items ?? 0)}.`,
       };
     }
 
@@ -224,52 +225,43 @@ function buildRationale(bucket: Bucket, questionNumbers: number[]): RationalePar
       const [lower, higher] = evidence.categories ?? ['', ''];
       return {
         text:
-          `فجوة ${evidence.gap} نقطة بين فئتي «${higher}» و«${lower}» في محور «${worst.axisName}»، ` +
-          `وأدنى الفئتين عند ${evidence.axisAverage}%.`,
+          `محور «${worst.axisName}»: «${higher}» ${evidence.comparisonHigh}% مقابل ` +
+          `«${lower}» ${evidence.axisAverage}%، بفارق ${evidence.gap} نقطة.`,
       };
     }
 
-    case 'low-reliability': {
+    case 'low-reliability':
       return {
-        text:
-          `ألفا كرونباخ لمحور «${worst.axisName}» ${evidence.alpha}، أي أن بنوده لا تقيس بعداً ` +
-          `واحداً متماسكاً، فمتوسطه ${evidence.axisAverage}% أضعف دلالة مما يبدو.`,
+        text: `محور «${worst.axisName}»: ألفا ${evidence.alpha}، والمتوسط ${evidence.axisAverage}%.`,
       };
-    }
 
-    case 'low-response': {
-      return {
-        text: `${listQuestions(questionNumbers)} أجاب عنها ${evidence.responseRate}% فقط من المشاركين، ما يشير إلى غموض الصياغة أو حساسية الموضوع.`,
-      };
-    }
+    case 'low-response':
+      return { text: `${scope}: معدل الاستجابة ${evidence.responseRate}%.` };
 
     default:
       return { text: '' };
   }
 }
 
-/** جملة قصيرة تصف إشارة ثانوية في المجال، بأرقامها من أدلتها هي */
+/** إشارة ثانوية في المجال نفسه: موضع وأرقامه، بأدلتها هي */
 function secondaryClause(finding: Finding): string {
   const evidence = finding.evidence;
   switch (finding.kind) {
     case 'polarization':
-      return (
-        `كما انقسم الرأي حول السؤال ${finding.questionNumber}: ${evidence.negativeShare}% غير ` +
-        `موافقين مقابل ${evidence.positiveShare}% موافقين، وهو انقسام لا يظهر في المتوسط.`
-      );
+      return `السؤال ${finding.questionNumber}: ${evidence.negativeShare}% غير موافقين مقابل ${evidence.positiveShare}% موافقين.`;
     case 'negative-tail':
-      return `ويرفض السؤال ${finding.questionNumber} ${evidence.negativeShare}% من المشاركين رغم وزنه ${evidence.relativeWeight}%.`;
+      return `السؤال ${finding.questionNumber}: غير الموافقين ${evidence.negativeShare}%، والوزن النسبي ${evidence.relativeWeight}%.`;
     case 'axis-weakness':
-      return `ومتوسط محور «${finding.axisName}» ككل ${evidence.axisAverage}% على ${itemsLabel(evidence.items ?? 0)}.`;
+      return `محور «${finding.axisName}»: المتوسط ${evidence.axisAverage}% على ${itemsLabel(evidence.items ?? 0)}.`;
     case 'group-gap':
-      return `وتوجد فجوة ${evidence.gap} نقطة بين فئتي «${(evidence.categories ?? [])[1]}» و«${(evidence.categories ?? [])[0]}».`;
+      return `محور «${finding.axisName}»: فارق ${evidence.gap} نقطة بين «${(evidence.categories ?? [])[1]}» و«${(evidence.categories ?? [])[0]}».`;
     case 'low-reliability':
-      return `وألفا محور «${finding.axisName}» ${evidence.alpha}، فمتوسطه أضعف دلالة مما يبدو.`;
+      return `محور «${finding.axisName}»: ألفا ${evidence.alpha}.`;
     case 'low-response':
-      return `وأجاب عن السؤال ${finding.questionNumber} ${evidence.responseRate}% فقط من المشاركين.`;
+      return `السؤال ${finding.questionNumber}: معدل الاستجابة ${evidence.responseRate}%.`;
     case 'critical-weakness':
     case 'weakness':
-      return `والسؤال ${finding.questionNumber} عند ${evidence.relativeWeight}%.`;
+      return `السؤال ${finding.questionNumber}: الوزن النسبي ${evidence.relativeWeight}%.`;
     default:
       return '';
   }

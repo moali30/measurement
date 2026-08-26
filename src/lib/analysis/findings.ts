@@ -34,6 +34,8 @@ export interface FindingEvidence {
   axisAverage?: number;
   alpha?: number;
   gap?: number;
+  /** متوسط الفئة الأعلى في المقارنة؛ `axisAverage` يحمل الأدنى */
+  comparisonHigh?: number;
   respondents?: number;
   /** عدد بنود المحور — منفصل عن عدد المستجيبين حتى لا يختلطا في نص التوصية */
   items?: number;
@@ -240,6 +242,7 @@ function comparisonFindings(
       evidence: {
         gap,
         axisAverage: lowest.value,
+        comparisonHigh: highest.value,
         categories: [lowest.category, highest.category],
       },
     });
