@@ -112,12 +112,30 @@ describe('الأسئلة العكسية', () => {
 });
 
 describe('حراسة السُّلَّم — قرار معلن لا قيمة تُستنتج', () => {
-  it('قيمة خارج ١-٥ توقف التقرير ولا تُصحَّح بصمت', () => {
+  it('سُلَّم مختلف يوقف التقرير ولا يُصحَّح بصمت', () => {
+    // نصف القيم خارج المقياس: هذه علامة عمود قيس على سُلَّم آخر
     const result = processData([{ [QUESTION]: 7 }, { [QUESTION]: 3 }], [], { [QUESTION]: 'likert' }, [], {
       questionOptionCounts: { [QUESTION]: 5 },
     });
     expect(result.analysisErrors.map((error) => error.code)).toEqual(['values-out-of-scale']);
     expect(result.results).toHaveLength(0);
+  });
+
+  it('قيمة شاردة واحدة تُعدّ مفقودة ويُبلَّغ عنها بدل إيقاف التقرير', () => {
+    // صفرٌ ورثته بيانات مهاجَرة عن خانة لم تُملأ هو إجابة غير صالحة، لا دليل
+    // على سُلَّم آخر. إيقاف تقرير كامل بسببه يعامل الشاردة معاملة اختلاف السُّلَّم.
+    const rows = Array.from({ length: 20 }, (_, index) => ({ [QUESTION]: (index % 5) + 1 }));
+    rows[0] = { [QUESTION]: 0 };
+    const result = processData(rows, [], { [QUESTION]: 'likert' }, [], {
+      questionOptionCounts: { [QUESTION]: 5 },
+    });
+
+    expect(result.analysisErrors).toEqual([]);
+    expect(result.results[0].count).toBe(19);
+    expect(result.results[0].missing).toBe(1);
+    expect(result.analysisWarnings.map((warning) => warning.code)).toContain(
+      'invalid-values-excluded'
+    );
   });
 
   it('ليكرت ببدائل غير خمس يوقف التقرير', () => {
@@ -155,15 +173,19 @@ describe('حراسة السُّلَّم — قرار معلن لا قيمة تُ
     ]);
   });
 
-  it('سؤال ليكرت معلن بقيمة واحدة فاسدة يوقف التقرير ولا يُستبعد', () => {
-    // الإعلان يقين: قيمة شاذة داخل بند قياس خللٌ في البيانات لا عمود دخيل
-    const rows = rowsFor(QUESTION, [8, 6, 4, 2, 0]);
-    rows[0] = { [QUESTION]: 9 };
-    const result = processData(rows, [], { [QUESTION]: 'likert' }, [], {
+  it('العمود المعلن ببنوده لا يُستبعد كعمود دخيل مهما فسدت قيمه', () => {
+    // التمييز الباقي بعد تخفيف الحارس: العمود غير المعلن يُستبعد بصمت موثّق،
+    // والمعلن يوقف التقرير — فالمُعلن بند قياس لا عمود عابر في ملف.
+    const rows = Array.from({ length: 20 }, (_, index) => ({ [QUESTION]: index + 1 }));
+
+    const declared = processData(rows, [], { [QUESTION]: 'likert' }, [], {
       questionOptionCounts: { [QUESTION]: 5 },
-      questionValueMaps: { [QUESTION]: VALUE_MAP },
     });
-    expect(result.analysisErrors.map((error) => error.code)).toEqual(['values-out-of-scale']);
+    expect(declared.analysisErrors.map((error) => error.code)).toEqual(['values-out-of-scale']);
+
+    // غير المعلن يُستبعد فلا يبقى بند يُحلَّل — لا يُبلَّغ عنه كخلل في مقياسه
+    const undeclared = processData(rows, [], undefined, undefined, {});
+    expect(undeclared.analysisErrors.map((error) => error.code)).toEqual(['no-likert-questions']);
   });
 
   it('إجابة نصية شاذة داخل بند ليكرت تُعدّ مفقودة لا تُهمَل', () => {

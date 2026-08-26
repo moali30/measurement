@@ -67,15 +67,17 @@ const EXCLUDED_TYPES = ['rating', 'linear_scale', 'number', 'date', 'file', 'mat
 const TEXT_TYPES = ['text', 'textarea'];
 
 /**
- * أقصى نسبة قيم خارج المقياس يحتملها عمود قبل أن نحكم بأنه ليس سؤال ليكرت.
+ * العتبة التي تفصل «قيمة شاردة» عن «سُلَّم مختلف».
  *
- * ملف النتائج المصدَّر يحمل عمود ترقيم وعمود تاريخ. أرقام الترقيم تتجاوز
- * الخمسة، وقيم التاريخ أرقام تسلسلية كبيرة، فكان رفض التقرير بسببهما يجعل كل
- * ملف تصدير غير قابل للتحليل. والتمييز بسيط: سؤال ليكرت فيه قيم فاسدة تبقى
- * أغلب قيمه صالحة، أما عمود ليس سؤالاً فأغلب قيمه خارج المقياس أو كلها.
+ * الخطر الذي يحرسه المحرك هو أن تُقاس إجابات سُلَّم آخر على الخماسي، فتخرج
+ * نسب مضخَّمة تبدو سليمة. وعلامة ذلك أن **كثيراً** من قيم العمود خارج المقياس،
+ * لا قيمة واحدة: عمود على سُلَّم 1-7 يخرج منه الأربعون بالمئة، وعمود ترقيم أو
+ * تاريخ تخرج منه القيم كلها تقريباً.
  *
- * لا ينطبق هذا على عمود أُعلن نوعه `likert` في النموذج: الإعلان يقين، فأي قيمة
- * خارج المقياس فيه خلل في البيانات يوقف التقرير.
+ * أما القيمة الشاردة الواحدة — صفرٌ ورثته بيانات مهاجَرة عن خانة لم تُملأ — فهي
+ * إجابة غير صالحة كالإجابة النصية داخل عمود ليكرت تماماً، وتُعامل معاملتها:
+ * تُعدّ مفقودة ويُبلَّغ عنها. إيقاف التقرير بسببها كان يعامل الحالتين
+ * المتماثلتين معاملتين متناقضتين.
  */
 const MAX_OUT_OF_SCALE_SHARE = 0.2;
 
@@ -113,6 +115,8 @@ interface ParsedData {
   demographics: SampleProfileGroup[];
   /** أعمدة رقمية استُبعدت لأنها ليست أسئلة ليكرت أصلاً */
   nonQuestionColumns: string[];
+  /** قيم شاردة خارج المقياس عُدّت مفقودة، بعدد كل سؤال */
+  discardedValues: { question: string; questionNumber: number; count: number }[];
 }
 
 export interface ProcessResult {
@@ -177,6 +181,7 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
   const commentGroups: { question: string; answers: string[] }[] = [];
   const demographics: SampleProfileGroup[] = [];
   const nonQuestionColumns: string[] = [];
+  const discardedValues: ParsedData['discardedValues'] = [];
 
   // قائمة أسئلة التعليقات تصل من واجهة مربّعات اختيار تعرض كل الأعمدة،
   // فوجودها — حتى فارغة — يعني أن المستخدم حسم أمر كل عمود.
@@ -266,14 +271,22 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
     if (values.length > 0 || outOfScale.length > 0) {
       const declaredLikert = qType === LIKERT_TYPE;
       const outOfScaleShare = outOfScale.length / (values.length + outOfScale.length);
-      if (!declaredLikert && outOfScaleShare > MAX_OUT_OF_SCALE_SHARE) {
+      const looksLikeAnotherScale = outOfScaleShare > MAX_OUT_OF_SCALE_SHARE;
+
+      // عمود لم يُعلن نوعه وأغلب قيمه خارج المقياس ليس سؤالاً أصلاً
+      if (!declaredLikert && looksLikeAnotherScale) {
         nonQuestionColumns.push(question);
         return;
       }
 
+      const questionNumber = questionNumberFrom(question, index);
+      if (!looksLikeAnotherScale && outOfScale.length > 0) {
+        discardedValues.push({ question, questionNumber, count: outOfScale.length });
+      }
+
       columns.push({
         question,
-        questionNumber: questionNumberFrom(question, index),
+        questionNumber,
         values,
         rowValues,
         // يُشتق من الصفوف لا يُعدّ يدوياً: كل صف يدفع مدخلاً واحداً في
@@ -304,7 +317,7 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
     }
   });
 
-  return { columns, commentGroups, demographics, nonQuestionColumns };
+  return { columns, commentGroups, demographics, nonQuestionColumns, discardedValues };
 }
 
 /** يحوّل عموداً مقروءاً إلى نتيجة سؤال كاملة الإحصاءات على السُّلَّم الخماسي */
@@ -390,7 +403,9 @@ function collectErrors(columns: ParsedColumn[], options: ProcessOptions): Analys
       });
     }
 
-    if (column.outOfScale.length > 0) {
+    const outOfScaleShare =
+      column.outOfScale.length / (column.values.length + column.outOfScale.length);
+    if (outOfScaleShare > MAX_OUT_OF_SCALE_SHARE) {
       const highest = column.outOfScale.reduce(
         (max, value) => (value > max ? value : max),
         -Infinity
@@ -417,9 +432,20 @@ function collectErrors(columns: ParsedColumn[], options: ProcessOptions): Analys
 /** استبعادات موثقة داخل التقرير لا توقفه */
 function collectExclusionWarnings(
   options: ProcessOptions,
-  nonQuestionColumns: string[]
+  nonQuestionColumns: string[],
+  discardedValues: ParsedData['discardedValues']
 ): AnalysisWarning[] {
   const types = options.questionTypes ?? {};
+  // القيمة الشاردة تُطرح من الحساب، فوجودها على الورق شرط ألا يكون الطرح صامتاً
+  const discarded: AnalysisWarning[] = discardedValues.map((entry) => ({
+    code: 'invalid-values-excluded' as const,
+    question: entry.question,
+    questionNumber: entry.questionNumber,
+    message:
+      `السؤال ${entry.questionNumber}: استُبعدت ${entry.count} قيمة خارج المقياس ` +
+      `${ANALYSIS_SCALE.min}-${ANALYSIS_SCALE.max} وعُدّت مفقودة.`,
+  }));
+
   const numericExclusions: AnalysisWarning[] = nonQuestionColumns.map((question) => ({
     code: 'question-excluded' as const,
     question,
@@ -428,7 +454,7 @@ function collectExclusionWarnings(
       `${ANALYSIS_SCALE.min}-${ANALYSIS_SCALE.max}، فهو ليس بند قياس.`,
   }));
 
-  return numericExclusions.concat(
+  return discarded.concat(numericExclusions).concat(
     Object.entries(types)
       .filter(
         ([question, type]) =>
@@ -450,7 +476,8 @@ function collectExclusionWarnings(
  */
 function computeCore(data: Record<string, unknown>[], options: ProcessOptions) {
   const totalRespondents = data.length;
-  const { columns, commentGroups, demographics, nonQuestionColumns } = parseColumns(data, options);
+  const { columns, commentGroups, demographics, nonQuestionColumns, discardedValues } =
+    parseColumns(data, options);
   const reversed = new Set(options.reversedQuestions ?? []);
 
   const scoredColumns: ScoredColumn[] = columns
@@ -486,6 +513,7 @@ function computeCore(data: Record<string, unknown>[], options: ProcessOptions) {
     commentGroups,
     demographics,
     nonQuestionColumns,
+    discardedValues,
     scoredColumns,
     reliability,
   };
@@ -639,7 +667,7 @@ export function processData(
     // والتعليقات معاً. بناؤها داخل الحساب كان سيجعلها ترى نصف الصورة.
     recommendations: buildRecommendations(summary as unknown as ReportData),
     analysisWarnings: [
-      ...collectExclusionWarnings(options, core.nonQuestionColumns),
+      ...collectExclusionWarnings(options, core.nonQuestionColumns, core.discardedValues),
       ...axisWarnings,
     ],
     analysisErrors: [],
