@@ -251,9 +251,9 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
       {/* التوصيات */}
       {recommendations.length > 0 && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold mb-1 text-indigo-800 dark:text-indigo-400">التوصيات</h3>
+          <h3 className="text-lg font-bold mb-1 text-indigo-800 dark:text-indigo-400">الجوانب التي تحتاج إلى تحسين</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            توصية واحدة لكل مجال، مرتبة بالأولوية. يُتابَع تنفيذ كل توصية بالوزن النسبي لبنودها.
+            الجوانب مرتبة بالأولوية، ولكل جانب هدف رقمي بالوزن النسبي يُقاس عليه التحسن.
           </p>
           <div className="space-y-4">
             {recommendations.map((recommendation) => {
@@ -275,11 +275,7 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
                     </span>
                   </header>
 
-                  <p className="font-semibold text-gray-800 dark:text-gray-200 mb-2 leading-relaxed">
-                    {recommendation.action}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 leading-relaxed">
-                    <span className="font-bold text-indigo-800 dark:text-indigo-400">المبرر: </span>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 leading-relaxed">
                     {recommendation.rationale}
                   </p>
 

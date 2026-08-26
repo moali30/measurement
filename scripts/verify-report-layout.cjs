@@ -80,7 +80,7 @@ async function run() {
     'توصيف العيّنة',
     'نتائج تحليل المحاور',
     'الرسوم البيانية والمؤشرات',
-    'التوصيات',
+    'الجوانب التي تحتاج إلى تحسين',
   ];
   required.forEach((title) => {
     expect(titles.includes(title), `القسم «${title}» غائب عن التقرير`);
@@ -116,7 +116,7 @@ async function run() {
   // السطر يزيد بكسلين عن الارتفاع المحسوب بحكم التقريب، فيبلّغ فحص الارتفاع
   // عن قصٍّ وهمي في كل خلية.
   const clipped = await page.$$eval(
-    '.print-table td, .print-table th, .print-kpi-card, .print-reco__goal, .print-reco__action',
+    '.print-table td, .print-table th, .print-kpi-card, .print-reco__goal, .print-reco__why',
     (nodes) =>
       nodes
         .filter((node) => node.scrollWidth > node.clientWidth + 1)

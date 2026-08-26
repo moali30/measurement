@@ -133,12 +133,11 @@ export function exportAnalysisWorkbook(data: ReportData): void {
   if (data.recommendations?.length) {
     addSheet(
       workbook,
-      'التوصيات',
+      'جوانب التحسين',
       data.recommendations.map((recommendation, index) => ({
         '#': index + 1,
         الأولوية: recommendation.priority,
         المجال: recommendationScope(recommendation),
-        التوصية: recommendation.action,
         المبرر: recommendation.rationale,
         'مؤشر القياس': recommendation.indicator,
         الهدف: recommendation.target,

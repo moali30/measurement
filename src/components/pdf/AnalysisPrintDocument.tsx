@@ -198,7 +198,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       : []),
     { title: 'التحليل النهائي والاستنتاجات', note: 'نقاط القوة ومواضع التحسين' },
     ...(hasRecommendations
-      ? [{ title: 'التوصيات', note: 'إجراء وهدف رقمي لكل مجال' }]
+      ? [{ title: 'الجوانب التي تحتاج إلى تحسين', note: 'المجالات الأدنى وأهدافها الرقمية' }]
       : []),
     ...(hasComments
       ? [{ title: 'تعليقات وملاحظات المشاركين', note: 'الإجابات النصية مجمَّعة' }]
@@ -724,15 +724,12 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
         </div>
       </section>
 
-      {/* ===== التوصيات =====
-          بطاقات لا جدول: سبعة حقول في صف واحد على عرض A4 عربي تسحق النص حتى
-          يصير عمود كلمة واحدة. البطاقة تعطي الإجراء سطره كاملاً وتضع الحقول
-          الأربعة القصيرة في شبكة أسفلها. */}
+      {/* ===== الجوانب التي تحتاج إلى تحسين ===== */}
       {hasRecommendations && (
         <section className="print-section print-section--flow" data-layout-section="true">
-          <h2 className="print-section-title">التوصيات</h2>
+          <h2 className="print-section-title">الجوانب التي تحتاج إلى تحسين</h2>
           <p style={{ fontSize: '10pt', marginBottom: '4mm' }} data-layout-lead="true">
-            {'توصية واحدة لكل مجال، مرتبة بالأولوية. كل رقم في المبرر مأخوذ من نتائج هذا التقرير، ويُتابَع تنفيذ كل توصية بالوزن النسبي لبنودها.'}
+            {'الجوانب مرتبة بالأولوية، وكل رقم فيها مأخوذ من نتائج هذا التقرير. لكل جانب هدف رقمي بالوزن النسبي يُقاس عليه التحسن في الدورة القادمة، وتحديد وسيلة المعالجة متروك للجهة المختصة.'}
           </p>
 
           {recommendations.map((recommendation, index) => {
@@ -753,11 +750,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
                   <span className="print-reco__scope">{recommendationScope(recommendation)}</span>
                 </header>
 
-                <p className="print-reco__action">{recommendation.action}</p>
-                <p className="print-reco__why">
-                  <strong>المبرر: </strong>
-                  {recommendation.rationale}
-                </p>
+                <p className="print-reco__why">{recommendation.rationale}</p>
 
                 <p className="print-reco__goal">
                   <strong>{recommendation.indicator}: </strong>

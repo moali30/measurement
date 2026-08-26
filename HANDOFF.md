@@ -34,6 +34,8 @@ actually reads. The engine and its guarantees are unchanged; this pass is about 
 | the *top-N* and *bottom-N* ranked charts | they repeated the results table, which is already sorted and ranked |
 | the *response histogram* | the same information, one level less specific than the distribution table |
 | the *owner* and *timeframe* fields on every recommendation | they turned a recommendation into an improvement plan, which was not wanted |
+| the *action* field, and with it the whole action catalogue | the report says **which** aspect needs work and **to what level**; *how* to fix it is the committee's call, not an engine's |
+| *strength* findings | the section is now titled «الجوانب التي تحتاج إلى تحسين»; strengths are still listed in the interpretive analysis |
 
 The exclusion warnings that used to live in the methodology section moved to the top of the
 results table, since they say which questions are *not* in that table.
@@ -233,7 +235,10 @@ not that it is about examinations.
 
 ### `recommendations.ts`
 
-**One recommendation per domain**, each with four fields: priority · action · rationale · target.
+**One entry per domain**, each with three fields: priority · rationale · target. The section is
+titled «الجوانب التي تحتاج إلى تحسين» — it names the aspect, cites its numbers, and sets a weight
+target. It prescribes no action: an engine reading percentages is not better placed than the
+committee to decide *how* to fix a laboratory or an exam policy.
 The indicator is the relative weight for every finding kind, so the whole set is followed with one
 measure that already appears beside every question in the results table.
 

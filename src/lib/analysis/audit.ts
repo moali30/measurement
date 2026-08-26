@@ -681,13 +681,12 @@ function auditRecommendations(audit: Auditor, data: ReportData): void {
     );
 
     audit.expect(
-      Boolean(recommendation.action.trim()) &&
-        Boolean(recommendation.rationale.trim()) &&
+      Boolean(recommendation.rationale.trim()) &&
         Boolean(recommendation.indicator.trim()) &&
         Boolean(recommendation.target.trim()),
       'error',
       'recommendation-incomplete',
-      'التوصية ناقصة أحد حقولها: الإجراء أو المبرر أو المؤشر أو الهدف.',
+      'الجانب ناقص أحد حقوله: المبرر أو المؤشر أو الهدف.',
       scope
     );
 

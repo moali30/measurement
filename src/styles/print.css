@@ -793,21 +793,13 @@
   color: #1a237e;
 }
 
-.print-reco__action {
-  margin: 0 0 1.5mm;
-  font-weight: 600;
-  line-height: 1.55;
-}
 
+/* المبرر صار النص الرئيسي بعد زوال سطر الإجراء */
 .print-reco__why {
   margin: 0 0 2mm;
-  color: #444444;
-  font-size: 8.9pt;
-  line-height: 1.5;
-}
-
-.print-reco__why strong {
-  color: #1a237e;
+  color: #333333;
+  font-size: 9.3pt;
+  line-height: 1.55;
 }
 
 .print-reco__quotes {

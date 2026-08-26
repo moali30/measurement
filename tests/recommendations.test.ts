@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { auditReport, formatAuditIssue } from '@/lib/analysis/audit';
 import { collectFindings } from '@/lib/analysis/findings';
-import {
-  MAX_RECOMMENDATIONS,
-  MAX_STRENGTH_RECOMMENDATIONS,
-  buildRecommendations,
-} from '@/lib/analysis/recommendations';
+import { MAX_RECOMMENDATIONS, buildRecommendations } from '@/lib/analysis/recommendations';
 import { classifyTheme } from '@/lib/analysis/themes';
 import type { ReportData } from '@/types/analysis';
 import { LevelCounts, analyseSurvey, buildSurvey, toReport } from './fixtures';
@@ -124,9 +120,8 @@ describe('بناء التوصيات', () => {
     expect(new Set(themes).size).toBe(themes.length);
   });
 
-  it('كل توصية كاملة الحقول الأربعة', () => {
+  it('كل جانب كامل الحقول الثلاثة', () => {
     recommendations.forEach((recommendation) => {
-      expect(recommendation.action.trim()).not.toBe('');
       expect(recommendation.rationale.trim()).not.toBe('');
       expect(recommendation.indicator.trim()).not.toBe('');
       expect(recommendation.target.trim()).not.toBe('');
@@ -141,20 +136,19 @@ describe('بناء التوصيات', () => {
     });
   });
 
-  it('الإجراء محدد لا صيغة عامة', () => {
-    const generic = 'تحليل أسباب النتيجة في هذا المجال';
-    recommendations
-      .filter((recommendation) => recommendation.theme !== 'general')
-      .forEach((recommendation) => {
-        expect(recommendation.action).not.toContain(generic);
-      });
+  it('كل جانب يسمّي بنوده ويحمل أرقامها', () => {
+    recommendations.forEach((recommendation) => {
+      expect(recommendation.rationale).toMatch(/\d/);
+      expect(recommendation.questionNumbers.length + (recommendation.kind === 'axis-weakness' ? 1 : 0))
+        .toBeGreaterThan(0);
+    });
   });
 
-  it('الانقسام يستدعي إجراءً مختلفاً عن الضعف', () => {
-    const polarized = recommendations.find(
-      (recommendation) => recommendation.kind === 'polarization'
-    );
-    expect(polarized?.action).toContain('الفئة الرافضة');
+  it('لا يصف وسيلة معالجة — التقرير يحدد الجانب لا الإجراء', () => {
+    const prescriptive = ['استطلاع', 'عقد ورشة', 'تشكيل فريق', 'مراجعة اتفاقيات'];
+    recommendations.forEach((recommendation) => {
+      prescriptive.forEach((verb) => expect(recommendation.rationale).not.toContain(verb));
+    });
   });
 
   it('مرتبة بالأولوية تنازلياً', () => {
@@ -203,7 +197,6 @@ describe('لا رقم بلا أصل', () => {
     ['ضعف حاد', [[0, 0, 2, 8, 10]]],
     ['انقسام', [[8, 0, 4, 0, 8]]],
     ['ذيل سلبي', [[4, 6, 2, 4, 4]]],
-    ['تميّز', [[16, 4, 0, 0, 0]]],
     ['مختلط', [
       [18, 12, 6, 4, 0],
       [4, 6, 6, 12, 12],
@@ -234,23 +227,11 @@ describe('لا رقم بلا أصل', () => {
   });
 });
 
-describe('نقاط القوة تُذكر ولا تُعدّد', () => {
-  it('استبيان ممتاز في كل بنوده لا ينتج قائمة تهنئة', () => {
+describe('نقاط القوة خارج القسم', () => {
+  it('استبيان ممتاز في كل بنوده لا ينتج جوانب تحتاج تحسيناً', () => {
     const report = excellentReport();
-    const recommendations = report.recommendations ?? [];
-    const strengths = recommendations.filter(
-      (recommendation) => recommendation.kind === 'strength'
-    );
-    expect(strengths.length).toBeLessThanOrEqual(MAX_STRENGTH_RECOMMENDATIONS);
-    expect(strengths.length).toBeGreaterThan(0);
+    expect(report.recommendations ?? []).toEqual([]);
     expect(auditReport(report).errors).toEqual([]);
-  });
-
-  it('نقطة القوة تُوصي بالتوثيق والنشر لا بالإصلاح', () => {
-    const strength = (excellentReport().recommendations ?? []).find(
-      (recommendation) => recommendation.kind === 'strength'
-    );
-    expect(strength?.action).toContain('توثيق');
   });
 });
 

@@ -35,8 +35,6 @@ export interface Recommendation {
   theme: ThemeKey;
   priority: Priority;
   severity: number;
-  /** ماذا يُفعل */
-  action: string;
   /** لماذا: الأرقام التي استدعت الإجراء */
   rationale: string;
   /** بماذا يُقاس النجاح — الوزن النسبي في كل التوصيات */
@@ -60,9 +58,6 @@ export const PRIORITY_STYLES: Record<Priority, { color: string; background: stri
 /** أقصى عدد توصيات — قائمة أطول من هذا لا تُقرأ ولا تُنفَّذ */
 export const MAX_RECOMMENDATIONS = 10;
 
-/** أقصى عدد نقاط قوة تُذكر؛ ما بعدها تعداد لا توصية */
-export const MAX_STRENGTH_RECOMMENDATIONS = 2;
-
 const PRIORITY_BANDS: ReadonlyArray<{ min: number; label: Priority }> = [
   { min: 80, label: 'عاجلة' },
   { min: 60, label: 'عالية' },
@@ -75,100 +70,6 @@ const INDICATOR = 'الوزن النسبي';
 
 function priorityFor(severity: number) {
   return PRIORITY_BANDS.find((band) => severity >= band.min) ?? PRIORITY_BANDS[3];
-}
-
-/**
- * الإجراء المقترح لكل (نوع مشكلة × مجال).
- * الصياغة تصف عملاً محدداً يمكن لجهة أن تبدأه غداً، لا نية عامة بالتحسين.
- */
-const ACTIONS: Partial<Record<FindingKind, Partial<Record<ThemeKey, string>>>> = {
-  'critical-weakness': {
-    'course-content':
-      'مراجعة توصيف المقررات المعنية ومواءمة مفرداتها مع مخرجات التعلم ومتطلبات سوق العمل، وحذف الموضوعات المكررة.',
-    teaching:
-      'عقد ورشة إلزامية في أساليب التدريس التفاعلي لأعضاء هيئة التدريس المعنيين، مع زيارات صفية تبادلية وتغذية راجعة مكتوبة.',
-    assessment:
-      'إعلان توصيف التقويم ومعايير التصحيح في أول محاضرة ونشره على المنصة، ومراجعة عيّنة من أوراق الإجابة بلجنة ثنائية.',
-    resources:
-      'حصر المراجع الناقصة لكل مقرر وتوفيرها ورقياً ورقمياً قبل بدء الفصل، وإتاحة نسخ إلكترونية على المنصة.',
-    facilities:
-      'حصر أعطال المعامل والقاعات وإصلاح الأعطال المتكررة، وإحلال الأجهزة التي تجاوزت عمرها التشغيلي.',
-    support:
-      'تفعيل ساعات الإرشاد الأكاديمي بمواعيد معلنة، وتخصيص مرشد لكل مجموعة طلابية مع سجل متابعة موثّق.',
-    administration:
-      'إعادة هندسة الإجراء الأبطأ في شؤون الطلاب وتحديد زمن إنجاز معياري لكل معاملة وإعلانه.',
-    communication:
-      'نشر المعلومات المطلوبة في دليل الطالب وعلى الموقع والمنصة، وتحديثها كلما تغيّرت.',
-    training:
-      'مراجعة اتفاقيات جهات التدريب، وزيارة كل جهة ميدانياً، وتوثيق تقرير لكل متدرب.',
-    general:
-      'تحليل أسباب التدني في هذا المجال بمراجعة إجراءاته الحالية ومقارنتها بما تطبقه الأقسام الأعلى تقييماً.',
-  },
-  polarization: {
-    'course-content':
-      'استطلاع الفئة الرافضة لتحديد الموضوعات التي تراها زائدة أو ناقصة تحديداً، ثم تعديل مفردات المقرر بناءً على ما تذكره لا على المتوسط.',
-    teaching:
-      'استطلاع الفئة الرافضة لمعرفة ما إذا كان التباين راجعاً لاختلاف الشُّعب أو المحاضرين، ثم توحيد الحد الأدنى لأسلوب العرض بينها.',
-    assessment:
-      'استطلاع الفئة الرافضة لتحديد أي مرحلة من التقويم أثارت الاعتراض (وضوح المعايير، أو التصحيح، أو توزيع الدرجات)، ثم معالجة تلك المرحلة تحديداً.',
-    resources:
-      'استطلاع الفئة الرافضة لتحديد المراجع الناقصة بعينها ولمن، فقد تكون النواقص في تخصص واحد لا في المكتبة كلها.',
-    facilities:
-      'استطلاع الفئة الرافضة لتحديد المعمل أو القاعة محل الشكوى، فالانقسام غالباً يعني أن المشكلة في موقع بعينه لا في المرافق كلها.',
-    support:
-      'استطلاع الفئة الرافضة لمعرفة من لم يصله الإرشاد ولماذا، فالانقسام هنا يعني خدمة تصل لبعض الطلاب دون بعض.',
-    administration:
-      'استطلاع الفئة الرافضة لتحديد المعاملة الأبطأ ومَن يتعثر فيها، ثم إعادة هندسة تلك المعاملة وحدها.',
-    communication:
-      'استطلاع الفئة الرافضة لمعرفة القناة التي لم تصلها المعلومة، فالانقسام يعني إعلاناً وصل لفئة دون أخرى.',
-    training:
-      'استطلاع الفئة الرافضة لتحديد جهات التدريب محل الاعتراض، فالانقسام غالباً يعكس تفاوتاً بين الجهات لا ضعفاً في البرنامج.',
-    general:
-      'استطلاع الفئة الرافضة بمجموعة نقاش مركّزة لتحديد سبب الانقسام قبل أي إجراء، ثم معالجة السبب لا المتوسط.',
-  },
-  weakness: {
-    'course-content':
-      'تحديث الموضوعات الأقل تقييماً في المقررات المعنية وإضافة تطبيقات عملية مرتبطة بمشكلات حقيقية.',
-    teaching:
-      'تنويع أساليب العرض بإضافة أنشطة صفية قصيرة ودراسات حالة، وقياس أثرها بتقييم منتصف الفصل.',
-    assessment:
-      'نشر نماذج امتحانات سابقة مع نموذج إجابة استرشادي، وتوزيع الدرجات على تقويم مستمر بدل امتحان واحد.',
-    resources:
-      'تحديث قائمة المراجع الأساسية سنوياً وربطها بقواعد البيانات الرقمية المتاحة للكلية.',
-    facilities:
-      'جدولة استخدام المعامل والقاعات بما يمنع التزاحم، ومعالجة ملاحظات التهوية والإضاءة والمقاعد.',
-    support:
-      'إطلاق برنامج دعم للطلاب المتعثرين بساعات مكتبية إضافية ومجموعات مذاكرة موجَّهة.',
-    administration:
-      'اختصار خطوات المعاملات الأكثر تكراراً وإتاحة تقديمها إلكترونياً، مع لوحة متابعة لزمن الإنجاز.',
-    communication:
-      'توحيد قنوات الإعلان في قناة رسمية واحدة، وإرسال ملخص أسبوعي بالمواعيد والقرارات.',
-    training:
-      'زيادة عدد جهات التدريب المتاحة وتنويعها، وربط مهام المتدرب بمخرجات تعلم معلنة مسبقاً.',
-    general:
-      'مراجعة إجراءات هذا المجال وتحديد أضعف حلقة فيها ومعالجتها أولاً.',
-  },
-};
-
-const FALLBACK_ACTION =
-  'مراجعة إجراءات هذا المجال وتحديد أضعف حلقة فيها ومعالجتها أولاً.';
-
-/** ضعف المحور هو مشكلة الضعف نفسها على نطاق أوسع، فيرث إجراءها في المجال */
-const KIND_ALIASES: Partial<Record<FindingKind, FindingKind>> = {
-  'axis-weakness': 'weakness',
-};
-
-/**
- * الأولوية للقالب الخاص بالمجال، ثم للصيغة العامة لنوع المشكلة.
- * العكس كان يجعل كل البنود المنقسمة تحمل الجملة نفسها مهما اختلف مجالها.
- */
-function actionFor(kind: FindingKind, theme: ThemeKey): string {
-  const specific = ACTIONS[kind]?.[theme];
-  if (specific) return specific;
-  const override = KIND_ACTION_OVERRIDE[kind];
-  if (override) return override;
-  const source = KIND_ALIASES[kind] ?? kind;
-  return ACTIONS[source]?.[theme] ?? ACTIONS[source]?.general ?? FALLBACK_ACTION;
 }
 
 /** أقرب عتبة تقييم أعلى من الوضع الحالي — هدف قابل للتحقق لا رقم اعتباطي */
@@ -267,10 +168,7 @@ interface RationaleParts {
  * للفجوة بين الفئات. متابعة خطة بستة مقاييس مختلفة لا تُنفَّذ عملياً، فوُحِّدت
  * على المقياس الذي يراه القارئ أمام كل بند في جدول النتائج.
  */
-function buildTarget(evidence: FindingEvidence, kind: FindingKind): string {
-  if (kind === 'strength') {
-    return `الحفاظ عليه عند ${NARRATIVE_THRESHOLDS.strength}% فأعلى`;
-  }
+function buildTarget(evidence: FindingEvidence): string {
   const weight = round2(evidence.relativeWeight ?? evidence.axisAverage ?? 0);
   return `رفعه من ${weight}% إلى ${nextBand(weight)}% فأعلى`;
 }
@@ -345,12 +243,6 @@ function buildRationale(bucket: Bucket, questionNumbers: number[]): RationalePar
       };
     }
 
-    case 'strength': {
-      return {
-        text: `${listQuestions(questionNumbers)} حصلت على ${evidence.relativeWeight}% ووافق عليها ${evidence.positiveShare}% من المشاركين.`,
-      };
-    }
-
     default:
       return { text: '' };
   }
@@ -378,36 +270,10 @@ function secondaryClause(finding: Finding): string {
     case 'critical-weakness':
     case 'weakness':
       return `والسؤال ${finding.questionNumber} عند ${evidence.relativeWeight}%.`;
-    case 'strength':
-      return `ويقابل ذلك تميّز في السؤال ${finding.questionNumber} بوزن ${evidence.relativeWeight}%.`;
     default:
       return '';
   }
 }
-
-const KIND_ACTION_OVERRIDE: Partial<Record<FindingKind, string>> = {
-  polarization:
-    'استطلاع الفئة الرافضة بمجموعة نقاش مركّزة لتحديد سبب الانقسام قبل أي إجراء، ثم معالجة السبب لا المتوسط.',
-  'negative-tail':
-    'تحديد الفئة الرافضة من بيانات المقارنة ومعالجة سببها المحدد بدل إجراء عام يستهدف الجميع.',
-  'low-reliability':
-    'مراجعة صياغة بنود المحور وحذف المزدوج منها أو الغامض، وإعادة اختبار ثباته في الدورة القادمة.',
-  'low-response':
-    'إعادة صياغة البند بلغة أوضح، وجعل الإجابة عنه اختيارية معلنة إن كان موضوعه حساساً.',
-  strength:
-    'توثيق الممارسة التي أنتجت هذه النتيجة ونشرها على بقية الأقسام كممارسة مرجعية.',
-  'group-gap':
-    'تحليل أسباب الفجوة بين الفئتين وتوجيه المعالجة للفئة الأدنى تحديداً بدل إجراء موحّد للجميع.',
-};
-
-/** لواحق تُضاف للإجراء حين تصاحب المشكلةَ الأساسية إشارةٌ من نوع آخر */
-const SECONDARY_ACTION_SUFFIX: Partial<Record<FindingKind, string>> = {
-  polarization:
-    ' وقبل التنفيذ، استطلع الفئة الرافضة لتحديد سبب الانقسام، فالمتوسط وحده لا يدل عليه.',
-  'group-gap': ' ووجّه المعالجة للفئة الأدنى تحديداً بدل إجراء موحّد للجميع.',
-  'low-reliability': ' وراجع صياغة بنود المحور قبل الاعتماد على متوسطه في القياس القادم.',
-  'low-response': ' وأعد صياغة البند الأقل استجابةً بلغة أوضح.',
-};
 
 /**
  * ترتيب أنواع المشكلات عند تساوي الشدة.
@@ -422,7 +288,6 @@ const KIND_ORDER: FindingKind[] = [
   'group-gap',
   'low-reliability',
   'low-response',
-  'strength',
 ];
 
 /** إشارة ثانوية واحدة تكفي: المبرر سطر يُقرأ في اجتماع، لا فقرة تُدرَس */
@@ -480,12 +345,6 @@ export function buildRecommendations(data: ReportData): Recommendation[] {
     const rationale = [parts.text, ...distinctSecondary.map(secondaryClause)]
       .filter(Boolean)
       .join(' ');
-    const action =
-      actionFor(bucket.primary.kind, bucket.theme) +
-      distinctSecondary
-        .map((finding) => SECONDARY_ACTION_SUFFIX[finding.kind] ?? '')
-        .join('');
-
     return {
       id: `${bucket.theme}-${bucket.primary.kind}`,
       findingIds: bucket.findings.map((finding) => finding.id),
@@ -493,10 +352,9 @@ export function buildRecommendations(data: ReportData): Recommendation[] {
       theme: bucket.theme,
       priority: band.label,
       severity: round2(severity),
-      action,
       rationale,
       indicator: INDICATOR,
-      target: buildTarget(bucket.primary.evidence, bucket.primary.kind),
+      target: buildTarget(bucket.primary.evidence),
       questionNumbers: allQuestions,
       quotes: quotesForTheme(bucket.theme, data.comments),
     } satisfies Recommendation;
@@ -511,13 +369,7 @@ export function buildRecommendations(data: ReportData): Recommendation[] {
 
   // استبيان ممتاز في كل مجالاته كان ينتج تسع توصيات كلها «حافظ على هذا».
   // نقطة القوة تُذكر للتثبيت والنشر، وذكر اثنتين يكفي؛ ما بعدهما تعداد لا توصية.
-  let strengths = 0;
   return ordered
-    .filter((recommendation) => {
-      if (recommendation.kind !== 'strength') return true;
-      strengths += 1;
-      return strengths <= MAX_STRENGTH_RECOMMENDATIONS;
-    })
     .slice(0, MAX_RECOMMENDATIONS);
 }
 

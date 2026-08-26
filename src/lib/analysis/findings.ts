@@ -22,8 +22,7 @@ export type FindingKind =
   | 'axis-weakness'
   | 'group-gap'
   | 'low-response'
-  | 'low-reliability'
-  | 'strength';
+  | 'low-reliability';
 
 /** الأرقام التي بُني عليها الاستنتاج — مصدر كل رقم يظهر في التوصية */
 export interface FindingEvidence {
@@ -109,19 +108,6 @@ function questionFindings(item: QuestionResult, theme: ThemeKey): Finding[] {
         relativeWeight: item.relativeWeight,
         normalizedScore: item.normalizedScore,
         negativeShare: item.negativeShare,
-        respondents: item.count,
-      },
-    });
-  } else if (item.relativeWeight >= NARRATIVE_THRESHOLDS.strength) {
-    found.push({
-      ...base,
-      id: `q${item.questionNumber}-strength`,
-      kind: 'strength',
-      // القوة تُذكر للتثبيت لا للإصلاح، فتبقى أسفل كل مشكلة حقيقية
-      severity: clamp((item.relativeWeight - NARRATIVE_THRESHOLDS.strength) / 2),
-      evidence: {
-        relativeWeight: item.relativeWeight,
-        positiveShare: item.positiveShare,
         respondents: item.count,
       },
     });
