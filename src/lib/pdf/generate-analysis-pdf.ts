@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -90,38 +92,50 @@ async function mergePdfs(parts: Uint8Array[], title: string): Promise<Buffer> {
 
 export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
   let browser;
-  // @sparticuz/chromium مخصص لبيئة Vercel/Linux serverless. تشغيل `next start`
-  // محلياً هو production أيضاً، لكنه يجب أن يستخدم Chromium الخاص بـ Playwright
-  // (خصوصاً على Windows) وإلا نحاول تشغيل ملف Linux محلياً.
-  if (process.env.VERCEL) {
-    const sparticuz = await import('@sparticuz/chromium');
-    const chromium = sparticuz.default || sparticuz;
-    const playwright = await import('playwright-core');
-
-    // الحزمة تضمّ الملف التنفيذي داخل bin/chromium.br، فاستدعاء executablePath()
-    // بدون وسيط يستخرج النسخة المطابقة للإصدار المثبّت — لا يمكن أن يحدث انحراف
-    // في الإصدار كما كان يحدث مع رابط tarball ثابت.
-    // CHROMIUM_PACK_URL منفذ هروب لو ضاق حجم حزمة النشر وأردنا تنزيله عن بُعد.
-    const packUrl = process.env.CHROMIUM_PACK_URL;
-    const exePath = await chromium.executablePath(packUrl || undefined);
-
-    // بعد استخراج fonts.tar.br وقبل الإقلاع: Chromium يقرأ الخطوط مرة واحدة عند بدء التشغيل
-    installReportFonts();
-
-    browser = await playwright.chromium.launch({
-      args: [...chromium.args, '--font-render-hinting=none'],
-      executablePath: exePath,
-      headless: true,
-    });
-  } else {
-    const { chromium } = await import('playwright');
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--font-render-hinting=none'],
-    });
-  }
+  let userDataDir: string | undefined;
 
   try {
+    // @sparticuz/chromium مخصص لبيئة Vercel/Linux serverless. تشغيل `next start`
+    // محلياً هو production أيضاً، لكنه يجب أن يستخدم Chromium الخاص بـ Playwright
+    // (خصوصاً على Windows) وإلا نحاول تشغيل ملف Linux محلياً.
+    if (process.env.VERCEL) {
+      const sparticuz = await import('@sparticuz/chromium');
+      const chromium = sparticuz.default || sparticuz;
+      const playwright = await import('playwright-core');
+
+      // الحزمة تضمّ الملف التنفيذي داخل bin/chromium.br، فاستدعاء executablePath()
+      // بدون وسيط يستخرج النسخة المطابقة للإصدار المثبّت — لا يمكن أن يحدث انحراف
+      // في الإصدار كما كان يحدث مع رابط tarball ثابت.
+      // CHROMIUM_PACK_URL منفذ هروب لو ضاق حجم حزمة النشر وأردنا تنزيله عن بُعد.
+      const packUrl = process.env.CHROMIUM_PACK_URL;
+      const exePath = await chromium.executablePath(packUrl || undefined);
+
+      // Playwright لا يحذف ملف مستخدم Chromium في Lambda الدافئة. تراكم هذه
+      // المجلدات يملأ /tmp، وعندها يفشل page.goto بـ ERR_INSUFFICIENT_RESOURCES.
+      // مسار مستقل لكل طلب يسمح لنا بحذفه حتماً في finally دون لمس ملفات Chromium
+      // المستخرجة التي تعيد الحزمة استخدامها بين التشغيلات.
+      userDataDir = join(tmpdir(), `playwright-${randomUUID()}`);
+
+      // بعد استخراج fonts.tar.br وقبل الإقلاع: Chromium يقرأ الخطوط مرة واحدة عند بدء التشغيل
+      installReportFonts();
+
+      browser = await playwright.chromium.launch({
+        args: [
+          ...chromium.args,
+          '--font-render-hinting=none',
+          `--user-data-dir=${userDataDir}`,
+        ],
+        executablePath: exePath,
+        headless: true,
+      });
+    } else {
+      const { chromium } = await import('playwright');
+      browser = await chromium.launch({
+        headless: true,
+        args: ['--font-render-hinting=none'],
+      });
+    }
+
     const page = await browser.newPage();
 
     // Inject data into window object before the page loads
@@ -187,6 +201,18 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
 
     return await mergePdfs([frontMatterPdf, signedPagesPdf], data.title);
   } finally {
-    await browser.close();
+    try {
+      if (browser) await browser.close();
+    } finally {
+      if (userDataDir) {
+        try {
+          await rm(userDataDir, { recursive: true, force: true });
+        } catch (error) {
+          // فشل التنظيف لا يجب أن يحوّل ملف PDF ناجحاً إلى استجابة 500، لكن يجب
+          // أن يظهر في سجل الخادم لأن تكراره يعيد سبب العطل نفسه.
+          console.warn(`[PDF] failed to remove Chromium profile ${userDataDir}`, error);
+        }
+      }
+    }
   }
 }

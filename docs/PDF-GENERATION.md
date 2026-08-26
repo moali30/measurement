@@ -61,6 +61,17 @@ computed expression is silently ignored. On Pro, edit the number to `300`.
 The route translates Playwright's raw errors into Arabic messages for timeouts and browser
 launch failures; everything else passes through.
 
+## Warm-function temporary storage
+
+Playwright leaves its Chromium user-data directory behind between warm Lambda invocations. If the
+default profile is reused implicitly, those directories accumulate under `/tmp` until Chromium
+fails navigation with `net::ERR_INSUFFICIENT_RESOURCES`.
+
+The Vercel launch path therefore gives every invocation a unique `--user-data-dir` and removes it
+in `finally`, including when navigation or PDF rendering throws. Keep that cleanup paired with the
+browser lifecycle. Do not delete the whole `/tmp` directory: Sparticuz intentionally caches its
+extracted Chromium binary there for warm starts.
+
 ## Adding a new report section
 
 1. Add a `<section className="print-section">` block in `AnalysisPrintDocument.tsx`.
