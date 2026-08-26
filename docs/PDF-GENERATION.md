@@ -67,10 +67,12 @@ Playwright leaves its Chromium user-data directory behind between warm Lambda in
 default profile is reused implicitly, those directories accumulate under `/tmp` until Chromium
 fails navigation with `net::ERR_INSUFFICIENT_RESOURCES`.
 
-The Vercel launch path therefore gives every invocation a unique `--user-data-dir` and removes it
-in `finally`, including when navigation or PDF rendering throws. Keep that cleanup paired with the
-browser lifecycle. Do not delete the whole `/tmp` directory: Sparticuz intentionally caches its
-extracted Chromium binary there for warm starts.
+The Vercel launch path therefore gives every invocation a unique directory through
+`launchPersistentContext(userDataDir, options)` and removes it in `finally`, including when
+navigation or PDF rendering throws. Playwright rejects passing `--user-data-dir` directly to
+`launch()`, so keep the persistent-context API and its cleanup paired. Do not delete the whole
+`/tmp` directory: Sparticuz intentionally caches its extracted Chromium binary there for warm
+starts.
 
 ## Adding a new report section
 

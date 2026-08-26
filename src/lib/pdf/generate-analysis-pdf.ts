@@ -92,6 +92,7 @@ async function mergePdfs(parts: Uint8Array[], title: string): Promise<Buffer> {
 
 export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
   let browser;
+  let persistentContext;
   let userDataDir: string | undefined;
 
   try {
@@ -119,12 +120,10 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
       // بعد استخراج fonts.tar.br وقبل الإقلاع: Chromium يقرأ الخطوط مرة واحدة عند بدء التشغيل
       installReportFonts();
 
-      browser = await playwright.chromium.launch({
-        args: [
-          ...chromium.args,
-          '--font-render-hinting=none',
-          `--user-data-dir=${userDataDir}`,
-        ],
+      // Playwright يرفض تمرير --user-data-dir إلى launch() ويشترط هذه الواجهة
+      // للمجلد المملوك للتطبيق. إغلاق السياق يغلق Chromium، ثم نحذف المجلد أدناه.
+      persistentContext = await playwright.chromium.launchPersistentContext(userDataDir, {
+        args: [...chromium.args, '--font-render-hinting=none'],
         executablePath: exePath,
         headless: true,
       });
@@ -136,7 +135,10 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
       });
     }
 
-    const page = await browser.newPage();
+    let page;
+    if (persistentContext) page = await persistentContext.newPage();
+    else if (browser) page = await browser.newPage();
+    else throw new Error('تعذّر تهيئة محرك الطباعة');
 
     // Inject data into window object before the page loads
     await page.addInitScript((reportData) => {
@@ -202,7 +204,8 @@ export async function generateAnalysisPdf(data: ReportData): Promise<Buffer> {
     return await mergePdfs([frontMatterPdf, signedPagesPdf], data.title);
   } finally {
     try {
-      if (browser) await browser.close();
+      if (persistentContext) await persistentContext.close();
+      else if (browser) await browser.close();
     } finally {
       if (userDataDir) {
         try {

@@ -8,15 +8,17 @@ const mocks = vi.hoisted(() => {
       throw new Error('page.goto: net::ERR_INSUFFICIENT_RESOURCES');
     }),
   };
-  const browser = {
+  const persistentContext = {
     newPage: vi.fn(async () => page),
     close: vi.fn(async () => undefined),
   };
 
   return {
-    browser,
+    persistentContext,
     page,
-    launch: vi.fn(async (_options: unknown) => browser),
+    launchPersistentContext: vi.fn(
+      async (_userDataDir: string, _options: unknown) => persistentContext
+    ),
     executablePath: vi.fn(async () => '/tmp/chromium'),
     removeProfile: vi.fn(async () => undefined),
   };
@@ -38,7 +40,9 @@ vi.mock('@sparticuz/chromium', () => ({
   },
 }));
 
-vi.mock('playwright-core', () => ({ chromium: { launch: mocks.launch } }));
+vi.mock('playwright-core', () => ({
+  chromium: { launchPersistentContext: mocks.launchPersistentContext },
+}));
 
 import { generateAnalysisPdf } from '@/lib/pdf/generate-analysis-pdf';
 
@@ -63,18 +67,20 @@ describe('تنظيف Chromium في Vercel', () => {
       'net::ERR_INSUFFICIENT_RESOURCES'
     );
 
-    const launchOptions = mocks.launch.mock.calls[0][0] as { args: string[] };
-    const profileArg = launchOptions.args.find((arg) => arg.startsWith('--user-data-dir='));
+    const [profilePath, launchOptions] = mocks.launchPersistentContext.mock.calls[0] as [
+      string,
+      { args: string[] },
+    ];
 
-    expect(profileArg).toMatch(/^--user-data-dir=.*playwright-[0-9a-f-]{36}$/i);
-    const profilePath = profileArg!.slice('--user-data-dir='.length);
+    expect(profilePath).toMatch(/playwright-[0-9a-f-]{36}$/i);
+    expect(launchOptions.args).not.toContainEqual(expect.stringContaining('--user-data-dir='));
 
-    expect(mocks.browser.close).toHaveBeenCalledOnce();
+    expect(mocks.persistentContext.close).toHaveBeenCalledOnce();
     expect(mocks.removeProfile).toHaveBeenCalledWith(profilePath, {
       recursive: true,
       force: true,
     });
-    expect(mocks.browser.close.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.persistentContext.close.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.removeProfile.mock.invocationCallOrder[0]
     );
   });
