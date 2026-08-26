@@ -3,11 +3,7 @@
 import React from 'react';
 import { QuestionResult, ReportData } from '@/types/analysis';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import {
-  getPolarizedResults,
-  getRankedCharts,
-  getWeightDistributionPieData,
-} from '@/lib/pdf/report-helpers';
+import { getPolarizedResults, getWeightDistributionPieData } from '@/lib/pdf/report-helpers';
 import { POLARIZATION, ShareTone, gradeFor, shareStyle } from '@/lib/analysis/scale';
 import { PRIORITY_STYLES, recommendationScope } from '@/lib/analysis/recommendations';
 
@@ -25,18 +21,15 @@ function ShareCell({
   value: number;
   dominant: boolean;
 }) {
-  const style = shareStyle(tone, value);
+  const style = shareStyle(tone);
   return (
     <td
-      className={`p-3 border text-center font-bold ${
-        dominant
-          ? 'border-2 border-indigo-700 dark:border-indigo-400'
-          : 'border-gray-200 dark:border-gray-700'
+      className={`p-3 border border-gray-200 dark:border-gray-700 text-center ${
+        dominant ? 'font-extrabold' : 'font-normal'
       }`}
       style={{ color: style.color, background: style.background }}
     >
       {value}%
-      {dominant && <span className="block text-[10px] font-normal opacity-80">الأكبر</span>}
     </td>
   );
 }
@@ -53,7 +46,6 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
 
   // الرسوم تعرض المؤشر المعياري: أرضيته صفر حقيقي، فارتفاع العمود يعبّر عن
   // المسافة من أسوأ تقييم ممكن لا عن نسبة من الحد الأعلى وحده.
-  const rankedCharts = getRankedCharts(data.resultsForAnalysis);
   const polarized = getPolarizedResults(data.results);
   const recommendations = data.recommendations ?? [];
 
@@ -214,40 +206,6 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <h4 className="font-bold mb-1 text-center">{rankedCharts.top.title}</h4>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 text-center">بالمؤشر المعياري (0–100)</p>
-          <div className="h-64" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rankedCharts.top.points}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" interval={0} tick={{ fontSize: 12 }} />
-                <YAxis domain={[0, 100]} />
-                <RechartsTooltip />
-                <Bar dataKey="score" fill="#2e7d32" name="المؤشر المعياري" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {rankedCharts.bottom && (
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-            <h4 className="font-bold mb-1 text-center">{rankedCharts.bottom.title}</h4>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 text-center">بالمؤشر المعياري (0–100)</p>
-            <div className="h-64" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rankedCharts.bottom.points}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" interval={0} tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} />
-                  <RechartsTooltip />
-                  <Bar dataKey="score" fill="#c62828" name="المؤشر المعياري" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
           <h4 className="font-bold mb-4 text-center">توزيع الأوزان النسبية للأسئلة</h4>
           <div className="h-64" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
@@ -293,9 +251,9 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
       {/* التوصيات */}
       {recommendations.length > 0 && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold mb-1 text-indigo-800 dark:text-indigo-400">التوصيات وخطة التحسين</h3>
+          <h3 className="text-lg font-bold mb-1 text-indigo-800 dark:text-indigo-400">التوصيات</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            توصية واحدة لكل مجال، مرتبة بالأولوية. كل رقم في المبرر مأخوذ من نتائج هذا التقرير.
+            توصية واحدة لكل مجال، مرتبة بالأولوية. يُتابَع تنفيذ كل توصية بالوزن النسبي لبنودها.
           </p>
           <div className="space-y-4">
             {recommendations.map((recommendation) => {
@@ -325,21 +283,12 @@ export default function AnalysisReport({ data }: AnalysisReportProps) {
                     {recommendation.rationale}
                   </p>
 
-                  <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
-                    {[
-                      ['الجهة المسؤولة', recommendation.owner],
-                      ['الإطار الزمني', recommendation.timeframe],
-                      ['مؤشر القياس', recommendation.indicator],
-                      ['الهدف', recommendation.target],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <dt className="text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">{label}</dt>
-                        <dd className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-snug">
-                          {value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
+                  <p className="pt-3 border-t border-dashed border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-800 dark:text-gray-200">
+                    <span className="text-gray-500 dark:text-gray-400 font-normal">
+                      {recommendation.indicator}:{' '}
+                    </span>
+                    {recommendation.target}
+                  </p>
 
                   {recommendation.quotes.length > 0 && (
                     <ul className="mt-3 list-disc list-inside text-xs text-gray-500 dark:text-gray-400 space-y-1">

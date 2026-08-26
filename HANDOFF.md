@@ -1,6 +1,6 @@
 # Handoff — Fixed Likert Scale, Audit Layer, and Recommendation Engine
 
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-26 (second pass)
 **Repository:** `moali30/measurement`
 **Branch:** `master`
 **Supersedes:** the previous handoff for commit `5683d3d` (*Fix survey scoring and optimize analysis
@@ -17,6 +17,55 @@ constant, inference and promotion are gone, and a mismatch stops the report with
 names the offending question. On top of that fixed base the release adds three new layers: a
 normalised score with a real zero floor, an invariant auditor that can block printing, and a
 recommendation engine that turns the numbers into assigned, measurable actions.
+
+---
+
+## 1b. Second pass — what the report shows
+
+After reviewing the printed output, the report was cut back to what a quality committee
+actually reads. The engine and its guarantees are unchanged; this pass is about presentation.
+
+**Removed from the report:**
+
+| Removed | Reason |
+|---|---|
+| the whole *methodology* section | it explained the engine to a reader who wants results |
+| the *audit appendix* | the auditor still blocks a bad report; printing its scorecard added a page nobody acts on |
+| the *top-N* and *bottom-N* ranked charts | they repeated the results table, which is already sorted and ranked |
+| the *response histogram* | the same information, one level less specific than the distribution table |
+| the *owner* and *timeframe* fields on every recommendation | they turned a recommendation into an improvement plan, which was not wanted |
+
+The exclusion warnings that used to live in the methodology section moved to the top of the
+results table, since they say which questions are *not* in that table.
+
+**Simplified:**
+
+- **The recommendation indicator is now the relative weight for every kind of finding.** Six
+  different indicators (rejection share, alpha, gap in points) cannot be followed in practice;
+  one measure that already appears next to every question can. Each recommendation is now four
+  fields: priority · action · rationale · weight target.
+- **The polarisation table lost its intensity ramp.** One flat tint per direction, the largest
+  share in bold, no legend and no explanatory line. The three-level ramp asked the reader to
+  decode two meanings at once — hue for direction, shade for size — while the number in the cell
+  already stated the size.
+- **The charts grid is a single column**, since only the performance donut remains.
+
+**Fixed:** the *final analysis* section was clipped at page boundaries. `.print-narrative` was a
+CSS grid, and Chromium clips grid items at a page break instead of moving them. It is block flow
+now, and the two short boxes are marked atomic so they move whole.
+
+### Section order after this pass
+
+Cover → contents → executive summary → results → polarised questions → sample profile → axis
+results → axis comparison → charts → group comparison → final analysis → recommendations →
+participant comments.
+
+### Consequences in code
+
+`src/lib/analysis/charts.ts` was deleted with the ranked charts, along with
+`getResponseHistogramData`, the `SHARE_BANDS` ramp, `THEMES[].owner`, and the audit's ranked-chart
+checks — replaced by a donut-bucket check. The layout verifier and both `.cjs` verifiers were
+updated to match; `LAYOUT_SABOTAGE=chart` is gone since there is no ranked chart to sabotage.
 
 ---
 
@@ -63,6 +112,8 @@ perfectly correct on the page, so a partial report is worse than none.
 | `rating` / `linear_scale` / `number` / `date` / `file` / `matrix` | excluded, with a documented warning |
 | `text` / `textarea` | comments |
 
+Exclusion warnings print at the head of the results table.
+
 For Excel imports there is no type metadata, so a text column with ≤ 12 distinct short values is
 treated as demographic and anything longer as comments.
 
@@ -92,7 +143,8 @@ normalised = (mean − 1) ÷ (5 − 1) × 100
   because its thresholds sit on real Likert anchors (80% = "agree").
 - The normalised score **replaced the standard-deviation column** in the results table. The
   deviation is still computed and exported to Excel; a number like `1.83` says nothing to a reader.
-- **Charts use the normalised score**, so bar height reads as distance from the worst rating.
+- The ranked charts that used it were removed in the second pass; the index now lives in the
+  results table and the axis table.
 - The transform is linear, so **ranking never changes** between the two measures.
 
 **Precision trap found during verification:** the normalised score was first computed from the
@@ -117,12 +169,10 @@ it. A question is polarised when **both ends reach 20%** of valid responses
 (`POLARIZATION.endShare`). Rows are sorted by the *smaller* end, because the sharpest split is the
 one where the two blocks are closest in size.
 
-The table colours each cell by the size of the share (high ≥ 40%, medium ≥ 20%, low below) within
-its own colour family — red for rejection, amber for neutral, green for agreement — and outlines the
-largest of the three. A single colour ramp made "45% rejecting" and "45% agreeing" look identical.
-
-The dominant-cell outline is drawn with an **inset box-shadow** as well as a border: the table uses
-`border-collapse`, so a neighbouring cell can swallow a plain border.
+Each direction has one flat tint — red for rejection, amber for neutral, green for agreement — and
+the largest of the three is bold. An earlier version varied the shade by size as well, which needed
+a four-item legend and a line of explanation to read a six-column table; the number in the cell
+already says how large the share is.
 
 ---
 
@@ -183,8 +233,9 @@ not that it is about examinations.
 
 ### `recommendations.ts`
 
-**One recommendation per domain**, each with six fields: action · rationale · owner · timeframe ·
-indicator · numeric target.
+**One recommendation per domain**, each with four fields: priority · action · rationale · target.
+The indicator is the relative weight for every finding kind, so the whole set is followed with one
+measure that already appears beside every question in the results table.
 
 Three constraints govern the design:
 
@@ -243,7 +294,7 @@ So every layer is tested by breaking it on purpose:
 
 - `tests/audit.test.ts` corrupts 30 invariants individually and asserts the auditor names each one.
 - `verify-analysis-engine.cjs` does the same with 19 defects against the print gate.
-- `verify-report-layout.cjs` accepts `LAYOUT_SABOTAGE=weight|normalized|wide|chart|reco`, which
+- `verify-report-layout.cjs` accepts `LAYOUT_SABOTAGE=weight|normalized|wide|reco`, which
   mutates **only the rendered copy** while keeping the reference intact. An early version mutated
   both, so they agreed on the error and no check caught it.
 

@@ -84,14 +84,7 @@ export const QUALITY_THRESHOLDS = {
   minimumAxisItems: 3,
 } as const;
 
-/** حدود شدة النسبة داخل جدول انقسام الآراء */
-export const SHARE_BANDS = {
-  high: 40,
-  medium: 20,
-} as const;
-
 export type ShareTone = 'negative' | 'neutral' | 'positive';
-export type ShareLevel = 'high' | 'medium' | 'low';
 
 export interface CellStyle {
   color: string;
@@ -99,41 +92,18 @@ export interface CellStyle {
 }
 
 /**
- * لون خلية النسبة: الدرجة اللونية تتبع حجم النسبة، والعائلة اللونية تتبع اتجاه
- * الرأي. لون واحد لكل الأعمدة كان يجعل «رفض 45%» و«موافقة 45%» متطابقين بصرياً
- * رغم أنهما نقيضان.
+ * لون واحد لكل اتجاه رأي، بلا تدرّج حسب حجم النسبة.
+ *
+ * التدرّج الثلاثي كان يحمّل الجدول معنيين في وقت واحد — العائلة اللونية تقول
+ * الاتجاه والدرجة تقول الحجم — فاحتاج وسيلة إيضاح بأربعة عناصر وسطر شرح.
+ * والرقم نفسه مكتوب في الخلية، فالتدرّج يكرر ما تقرؤه العين أصلاً.
  */
-const SHARE_PALETTE: Record<ShareTone, Record<ShareLevel, CellStyle>> = {
-  negative: {
-    high:   { color: '#7f1010', background: '#f6c9c9' },
-    medium: { color: '#b71c1c', background: '#fce4e4' },
-    low:    { color: '#a86a6a', background: '#fdf6f6' },
-  },
-  neutral: {
-    high:   { color: '#6d4a00', background: '#fbe6b4' },
-    medium: { color: '#8a5300', background: '#fff6dd' },
-    low:    { color: '#a89463', background: '#fffdf6' },
-  },
-  positive: {
-    high:   { color: '#14481a', background: '#c7e6cc' },
-    medium: { color: '#2e7d32', background: '#e6f4e8' },
-    low:    { color: '#6f9c74', background: '#f7fbf7' },
-  },
+const SHARE_STYLES: Record<ShareTone, CellStyle> = {
+  negative: { color: '#b71c1c', background: '#fdecea' },
+  neutral: { color: '#8a5300', background: '#fff8e1' },
+  positive: { color: '#1b5e20', background: '#e8f5e9' },
 };
 
-/** شدة النسبة: مرتفعة / متوسطة / منخفضة */
-export function shareLevel(percentage: number): ShareLevel {
-  if (percentage >= SHARE_BANDS.high) return 'high';
-  if (percentage >= SHARE_BANDS.medium) return 'medium';
-  return 'low';
+export function shareStyle(tone: ShareTone): CellStyle {
+  return SHARE_STYLES[tone];
 }
-
-export function shareStyle(tone: ShareTone, percentage: number): CellStyle {
-  return SHARE_PALETTE[tone][shareLevel(percentage)];
-}
-
-export const SHARE_LEVEL_LABELS: Record<ShareLevel, string> = {
-  high: `مرتفعة (${SHARE_BANDS.high}% فأعلى)`,
-  medium: `متوسطة (${SHARE_BANDS.medium}% إلى أقل من ${SHARE_BANDS.high}%)`,
-  low: `منخفضة (أقل من ${SHARE_BANDS.medium}%)`,
-};

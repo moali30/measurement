@@ -305,52 +305,6 @@
 
 /* ===== صفحة المنهجية ===== */
 
-.print-method-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 9.35pt;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2.5mm;
-}
-
-.print-method-list li {
-  display: block;
-  padding: 3mm;
-  border: 1px solid #e0e3f2;
-  border-right: 3px solid #3949ab;
-  border-radius: 5px;
-  background: #fafbff;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-.print-method-list dt,
-.print-method-list .term {
-  display: block;
-  font-weight: 700;
-  color: #1a237e;
-  margin-bottom: 1mm;
-}
-
-.print-method-list .desc {
-  display: block;
-  line-height: 1.55;
-}
-
-.print-method-summary {
-  margin-bottom: 3mm;
-  padding: 2.5mm 3mm;
-  border-radius: 5px;
-  background: #e8eaf6;
-  color: #1a237e;
-  text-align: center;
-  font-size: 9.2pt;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
 .print-data-warning {
   margin-bottom: 3mm;
   padding: 3mm 4mm;
@@ -459,56 +413,30 @@
   unicode-bidi: embed;
 }
 
-/* جدول مضمّن داخل بند منهجية — أضيق وبلا هوامش سفلية زائدة */
-.print-table--inline {
-  font-size: 8.6pt;
-  margin: 1.5mm 0 0;
-}
-
-.print-table--inline th,
-.print-table--inline td {
-  padding: 1.1mm 1.5mm;
-}
-
 /* جدول انقسام الآراء: خلايا النسب تحمل ألوانها inline من shareStyle() */
 .print-table--shares {
   font-size: 9pt;
 }
 
+/* الخلية الأكبر في الصف تُميَّز بثقل الخط وحده: الإطار السميك مع تدرّج لوني
+   ثلاثي كان يحتاج وسيلة إيضاح وسطر شرح لقراءة جدول من ستة أعمدة */
 .print-table--shares .share {
   text-align: center;
-  font-weight: 700;
+  font-weight: 400;
   direction: ltr;
   unicode-bidi: embed;
   white-space: nowrap;
 }
 
-/* أكبر النسب الثلاث في الصف — إطار داكن يميّزها عن تدرّج اللون وحده،
-   فالتدرّج يقارن داخل العمود والإطار يقارن داخل الصف */
-.print-table--shares .share--dominant {
-  /* الجدول مضبوط على border-collapse، فالحدود المتجاورة تُدمج وقد يبتلع الجار
-     إطار الخلية. الظل الداخلي يُرسم داخل الخلية نفسها فلا يخضع للدمج. */
-  border: 1.4pt solid #1a237e;
-  box-shadow: inset 0 0 0 1.2pt #1a237e;
-}
-
-/* مربعات وسيلة الإيضاح تحتاج حداً، فأفتح الدرجات يكاد يكون أبيض على الورق */
-.print-legend--shares .print-legend__swatch {
-  border: 0.5pt solid #9aa0b5;
-}
-
 /* الخلفيات المطبوعة تُحذف افتراضياً في Chromium فتضيع دلالة اللون كلها */
+.print-table--shares .share--dominant {
+  font-weight: 800;
+}
+
 .print-table--shares .share,
 .print-table .grade {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
-}
-
-.print-legend--shares {
-  justify-content: flex-start;
-  gap: 4mm;
-  font-size: 8.6pt;
-  margin-top: 1mm;
 }
 
 .print-table .weight {
@@ -551,9 +479,10 @@
   background: #ffffff;
 }
 
+/* عمود واحد: لم يبق غير الرسم الدائري، وعمودان كانا يتركان نصف العرض بياضاً */
 .print-chart-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--print-card-gap);
 }
 
@@ -713,14 +642,13 @@
   border-radius: 2mm;
 }
 
+/* تدفّق كتلي لا شبكة: Chromium يقصّ عناصر الـ grid عند حد الصفحة بدل نقلها،
+   فكان صندوق المتوسط العام يظهر بعنوانه وحده وقيمته مقطوعة أسفل الصفحة. */
 .print-narrative {
   font-size: 11pt;
   line-height: 1.8;
   orphans: 3;
   widows: 3;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--print-card-gap);
 }
 
 .print-narrative h4,
@@ -734,6 +662,7 @@
 .print-narrative-box {
   break-inside: auto;
   page-break-inside: auto;
+  margin-bottom: var(--print-card-gap);
   orphans: 3;
   widows: 3;
   margin-bottom: 0;
@@ -743,8 +672,10 @@
   background: #fafafa;
 }
 
-.print-narrative-box--wide {
-  grid-column: 1 / -1;
+/* الصناديق القصيرة تُنقل كاملة بدل أن تُقصّ؛ الطويلة تبقى متدفّقة */
+.print-narrative-box--atomic {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 /* المجموعة تتدفق عبر الصفحات — منع الكسر كان يقفز بمجموعة طويلة إلى صفحة
@@ -822,56 +753,7 @@
   }
 }
 
-/* مربع «الأكبر في الصف» في وسيلة الإيضاح — يحاكي إطار الخلية المميّزة */
-.print-legend__swatch--dominant {
-  background: #ffffff;
-  border: 1.2pt solid #1a237e !important;
-}
-
 /* ===== ملحق التدقيق ===== */
-
-.print-audit-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--print-card-gap);
-  margin-bottom: 3.5mm;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-.print-audit-summary > div {
-  padding: 3mm;
-  border: 1.5px solid #c5cae9;
-  border-radius: 8px;
-  background: #fafbff;
-  text-align: center;
-}
-
-.print-audit-summary strong {
-  display: block;
-  font-size: 17pt;
-  color: #1a237e;
-  direction: ltr;
-  line-height: 1.25;
-}
-
-.print-audit-summary span {
-  display: block;
-  font-size: 8.6pt;
-  color: #555555;
-  margin-top: 1mm;
-}
-
-.print-audit-clear {
-  margin: 0;
-  padding: 3mm 4mm;
-  border: 1px solid #a5d6a7;
-  border-right: 4px solid #2e7d32;
-  border-radius: 5px;
-  background: #f4faf5;
-  font-size: 9.4pt;
-  color: #1b5e20;
-}
 
 /* ===== بطاقات التوصيات ===== */
 
@@ -928,29 +810,6 @@
   color: #1a237e;
 }
 
-.print-reco__meta {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2mm;
-  margin: 0;
-  padding-top: 1.8mm;
-  border-top: 1px dashed #d7dbf0;
-}
-
-.print-reco__meta dt {
-  font-size: 7.8pt;
-  color: #777777;
-  margin-bottom: 0.6mm;
-}
-
-.print-reco__meta dd {
-  margin: 0;
-  font-size: 8.5pt;
-  font-weight: 600;
-  color: #222222;
-  line-height: 1.4;
-}
-
 .print-reco__quotes {
   margin: 2mm 0 0;
   padding-right: 4mm;
@@ -960,4 +819,18 @@
 
 .print-reco__quotes li {
   margin-bottom: 0.6mm;
+}
+
+.print-reco__goal {
+  margin: 0;
+  padding-top: 1.8mm;
+  border-top: 1px dashed #d7dbf0;
+  font-size: 8.8pt;
+  font-weight: 600;
+  color: #222222;
+}
+
+.print-reco__goal strong {
+  color: #777777;
+  font-weight: 400;
 }

@@ -124,12 +124,10 @@ describe('بناء التوصيات', () => {
     expect(new Set(themes).size).toBe(themes.length);
   });
 
-  it('كل توصية كاملة الحقول الستة', () => {
+  it('كل توصية كاملة الحقول الأربعة', () => {
     recommendations.forEach((recommendation) => {
       expect(recommendation.action.trim()).not.toBe('');
       expect(recommendation.rationale.trim()).not.toBe('');
-      expect(recommendation.owner.trim()).not.toBe('');
-      expect(recommendation.timeframe.trim()).not.toBe('');
       expect(recommendation.indicator.trim()).not.toBe('');
       expect(recommendation.target.trim()).not.toBe('');
     });
@@ -157,7 +155,6 @@ describe('بناء التوصيات', () => {
       (recommendation) => recommendation.kind === 'polarization'
     );
     expect(polarized?.action).toContain('الفئة الرافضة');
-    expect(polarized?.indicator).toBe('نسبة غير الموافقين');
   });
 
   it('مرتبة بالأولوية تنازلياً', () => {
@@ -174,6 +171,12 @@ describe('بناء التوصيات', () => {
       else if (recommendation.severity >= 60) expect(recommendation.priority).toBe('عالية');
       else if (recommendation.severity >= 40) expect(recommendation.priority).toBe('متوسطة');
       else expect(recommendation.priority).toBe('داعمة');
+    });
+  });
+
+  it('المؤشر موحَّد على الوزن النسبي', () => {
+    recommendations.forEach((recommendation) => {
+      expect(recommendation.indicator).toBe('الوزن النسبي');
     });
   });
 

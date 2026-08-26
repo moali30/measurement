@@ -140,8 +140,6 @@ export function exportAnalysisWorkbook(data: ReportData): void {
         المجال: recommendationScope(recommendation),
         التوصية: recommendation.action,
         المبرر: recommendation.rationale,
-        'الجهة المسؤولة': recommendation.owner,
-        'الإطار الزمني': recommendation.timeframe,
         'مؤشر القياس': recommendation.indicator,
         الهدف: recommendation.target,
         'أرقام الأسئلة': recommendation.questionNumbers.join('، '),

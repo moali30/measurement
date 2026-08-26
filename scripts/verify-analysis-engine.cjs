@@ -17,7 +17,6 @@ const statistics = loadTypeScriptModule('src/lib/analysis/statistics.ts');
 const analysis = loadTypeScriptModule('src/lib/analysis-utils.ts');
 const comments = loadTypeScriptModule('src/lib/analysis/comments.ts');
 const scale = loadTypeScriptModule('src/lib/analysis/scale.ts');
-const charts = loadTypeScriptModule('src/lib/analysis/charts.ts');
 const auditModule = loadTypeScriptModule('src/lib/analysis/audit.ts');
 const reportHelpers = loadTypeScriptModule('src/lib/pdf/report-helpers.ts');
 const reportLayout = loadTypeScriptModule('src/lib/pdf/report-layout.ts');
@@ -278,35 +277,6 @@ const expectedAxisAverage =
   ) / 100;
 assert.equal(withAxis.axes[0].average, expectedAxisAverage);
 assert.equal(withAxis.overallAverage, expectedAxisAverage);
-
-// ============================================================
-// ١٠) الرسوم: المجموعتان متباينتان مهما كان عدد الأسئلة
-// ============================================================
-
-for (let count = 1; count <= 30; count += 1) {
-  const ranked = Array.from({ length: count }, (_, index) => ({
-    questionNumber: index + 1,
-    normalizedScore: 100 - index * 2,
-  }));
-  const { top, bottom } = charts.getRankedCharts(ranked);
-  const topNumbers = new Set(top.points.map((point) => point.questionNumber));
-
-  assert.ok(
-    !bottom || bottom.points.every((point) => !topNumbers.has(point.questionNumber)),
-    `تداخل بين رسمي الأعلى والأدنى عند ${count} سؤالاً`
-  );
-  if (count < charts.SPLIT_CHART_MINIMUM) {
-    assert.equal(bottom, null, `يجب عرض رسم واحد عند ${count} سؤالاً`);
-    assert.equal(top.points.length, count, 'الرسم الواحد يعرض كل الأسئلة');
-  } else {
-    assert.equal(top.points.length, 10);
-    assert.ok(bottom.points.length >= 3);
-  }
-  assert.ok(
-    top.points.every((point, index) => index === 0 || top.points[index - 1].score >= point.score),
-    'رسم الأعلى غير مرتب تنازلياً'
-  );
-}
 
 // ============================================================
 // ١١) المدقّق: يمر على السليم، ويمسك كل خلل مصطنع

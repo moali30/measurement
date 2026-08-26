@@ -20,7 +20,6 @@ import {
   QUALITY_THRESHOLDS,
   RELATIVE_WEIGHT_FLOOR,
 } from './scale';
-import { getRankedCharts } from './charts';
 import { FINDING_THRESHOLDS, collectFindings } from './findings';
 import { MAX_RECOMMENDATIONS } from './recommendations';
 
@@ -599,55 +598,33 @@ function auditSampleProfile(audit: Auditor, data: ReportData): void {
 }
 
 /**
- * الرسوم دوال في الجدول، لا تصميم مستقل. فحصها هنا يمنع انحراف الرسم عن
- * الأرقام التي فوقه — وهو انحراف لا يكشفه أي فحص على الجدول وحده.
+ * الرسم الدائري دالة في جدول النتائج لا تصميم مستقل.
+ *
+ * الفئات الثلاث متباينة وتغطي المدى كله، فمجموعها يجب أن يساوي عدد الأسئلة.
+ * وزن غير رقمي لا يقع في أي فئة، فينكسر المجموع ويُكشف الخلل — وهو ما لا
+ * يظهر في الرسم نفسه لأن القطاعات تُرسم بما وجدته.
+ *
+ * تُحسب هنا مباشرةً لا عبر `report-helpers`: ذلك الملف يستورد المدقق، فاستيراده
+ * منه يغلق دورة تنكسر عند أول ثابت يُقرأ وقت التهيئة.
  */
 function auditCharts(audit: Auditor, data: ReportData): void {
-  const { top, bottom } = getRankedCharts(data.resultsForAnalysis);
-  const scoreByNumber = new Map(
-    data.results.map((item) => [item.questionNumber, item.normalizedScore])
-  );
-
-  const topNumbers = new Set(top.points.map((point) => point.questionNumber));
-  audit.expect(
-    !bottom || bottom.points.every((point) => !topNumbers.has(point.questionNumber)),
-    'error',
-    'charts-overlap',
-    'رسما الأعلى والأدنى يشتركان في سؤال واحد على الأقل، فيظهر العمود نفسه مرتين.'
-  );
-
-  audit.expect(
-    top.points.every(
-      (point, index) => index === 0 || top.points[index - 1].score >= point.score
-    ),
-    'error',
-    'top-chart-not-sorted',
-    'رسم الأعلى غير مرتب تنازلياً.'
-  );
+  const high = data.results.filter(
+    (item) => item.relativeWeight >= DISTRIBUTION_BANDS.high
+  ).length;
+  const medium = data.results.filter(
+    (item) =>
+      item.relativeWeight >= DISTRIBUTION_BANDS.medium &&
+      item.relativeWeight < DISTRIBUTION_BANDS.high
+  ).length;
+  const low = data.results.filter(
+    (item) => item.relativeWeight < DISTRIBUTION_BANDS.medium
+  ).length;
 
   audit.expect(
-    !bottom ||
-      bottom.points.every(
-        (point, index) => index === 0 || bottom.points[index - 1].score <= point.score
-      ),
+    high + medium + low === data.results.length,
     'error',
-    'bottom-chart-not-sorted',
-    'رسم الأدنى غير مرتب تصاعدياً من الأسوأ.'
-  );
-
-  const points = [...top.points, ...(bottom?.points ?? [])];
-  audit.expect(
-    points.every((point) => scoreByNumber.get(point.questionNumber) === point.score),
-    'error',
-    'chart-value-mismatch',
-    'قيمة عمود في الرسم لا تطابق المؤشر المعياري لسؤالها في الجدول.'
-  );
-
-  audit.expect(
-    points.every((point) => point.score >= 0 && point.score <= 100),
-    'error',
-    'chart-value-out-of-range',
-    'قيمة في الرسم خارج نطاق المحور 0-100.'
+    'distribution-buckets-mismatch',
+    `مجموع فئات الأداء ${high + medium + low} لا يساوي عدد الأسئلة ${data.results.length}.`
   );
 }
 
@@ -706,13 +683,11 @@ function auditRecommendations(audit: Auditor, data: ReportData): void {
     audit.expect(
       Boolean(recommendation.action.trim()) &&
         Boolean(recommendation.rationale.trim()) &&
-        Boolean(recommendation.owner.trim()) &&
-        Boolean(recommendation.timeframe.trim()) &&
         Boolean(recommendation.indicator.trim()) &&
         Boolean(recommendation.target.trim()),
       'error',
       'recommendation-incomplete',
-      'التوصية ناقصة أحد حقولها الستة (الإجراء، المبرر، الجهة، المدة، المؤشر، الهدف).',
+      'التوصية ناقصة أحد حقولها: الإجراء أو المبرر أو المؤشر أو الهدف.',
       scope
     );
 

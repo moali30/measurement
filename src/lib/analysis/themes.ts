@@ -25,60 +25,48 @@ export type ThemeKey =
 export interface Theme {
   key: ThemeKey;
   label: string;
-  /** الجهة المقترحة لتنفيذ التوصيات في هذا المجال */
-  owner: string;
 }
 
 export const THEMES: Record<ThemeKey, Theme> = {
   'course-content': {
     key: 'course-content',
     label: 'محتوى المقررات',
-    owner: 'لجنة المقررات ومنسق البرنامج',
   },
   teaching: {
     key: 'teaching',
     label: 'طرق التدريس',
-    owner: 'رئيس القسم ووحدة تنمية قدرات أعضاء هيئة التدريس',
   },
   assessment: {
     key: 'assessment',
     label: 'التقويم والامتحانات',
-    owner: 'لجنة الامتحانات والتقويم',
   },
   resources: {
     key: 'resources',
     label: 'الموارد والمراجع',
-    owner: 'إدارة المكتبة ووحدة المشتريات',
   },
   facilities: {
     key: 'facilities',
     label: 'المعامل والقاعات',
-    owner: 'إدارة الكلية وإدارة المعامل',
   },
   support: {
     key: 'support',
     label: 'الدعم والإرشاد الطلابي',
-    owner: 'وحدة الإرشاد الأكاديمي ورعاية الطلاب',
   },
   administration: {
     key: 'administration',
     label: 'الإجراءات الإدارية',
-    owner: 'أمين الكلية وإدارة شؤون الطلاب',
   },
   communication: {
     key: 'communication',
     label: 'الإعلان والتواصل',
-    owner: 'وحدة الإعلام ووحدة ضمان الجودة',
   },
   training: {
     key: 'training',
     label: 'التدريب الميداني',
-    owner: 'لجنة التدريب الميداني وشراكات المجتمع',
   },
   general: {
     key: 'general',
     label: 'مجالات عامة',
-    owner: 'وحدة ضمان الجودة',
   },
 };
 

@@ -1,10 +1,6 @@
 import { Axis, QuestionResult, ReportData } from '@/types/analysis';
 import { auditReport, formatAuditIssue } from '@/lib/analysis/audit';
-import { getRankedCharts } from '@/lib/analysis/charts';
-import { ANALYSIS_SCALE, DISTRIBUTION_BANDS, POLARIZATION } from '@/lib/analysis/scale';
-
-export { getRankedCharts };
-export type { RankedChart, RankedChartPoint, RankedCharts } from '@/lib/analysis/charts';
+import { DISTRIBUTION_BANDS, POLARIZATION } from '@/lib/analysis/scale';
 
 export function cleanAutoCommentHtml(html: string): string {
   return html
@@ -82,34 +78,6 @@ export function getWeightDistribution(results: QuestionResult[]): DistributionBu
 /** الشرائح غير الصفرية فقط — الرسم الدائري لا يجب أن يحتوي قطاعات بلا مساحة */
 export function getWeightDistributionPieData(results: QuestionResult[]): DistributionBucket[] {
   return getWeightDistribution(results).filter((item) => item.value > 0);
-}
-
-/**
- * المدرج التكراري العام: كم استجابة وقعت على كل مستوى من السُّلَّم عبر كل
- * الأسئلة مجتمعة. يوضح ميل العينة ككل (متفائلة / محايدة / ناقدة) وهو ما لا
- * يظهره متوسط كل سؤال على حدة.
- */
-export function getResponseHistogramData(results: QuestionResult[]) {
-  const levels = ['غير موافق جداً', 'غير موافق', 'محايد', 'موافق', 'موافق جداً'] as const;
-  const totals = new Map<number, number>(levels.map((_, index) => [index, 0]));
-
-  results.forEach((item) => {
-    item.distribution.forEach((slice) => {
-      const scaleMin = item.scaleMin ?? ANALYSIS_SCALE.min;
-      const bucket = Math.min(levels.length - 1, Math.max(0, Math.round(slice.value - scaleMin)));
-      totals.set(bucket, (totals.get(bucket) ?? 0) + slice.count);
-    });
-  });
-
-  const grandTotal = Array.from(totals.values()).reduce((a, b) => a + b, 0);
-
-  return Array.from(totals.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([level, count]) => ({
-      name: levels[level],
-      count,
-      percentage: grandTotal > 0 ? Math.round((count / grandTotal) * 100) : 0,
-    }));
 }
 
 /**

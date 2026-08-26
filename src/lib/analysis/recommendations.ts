@@ -15,8 +15,14 @@
 
 import type { CommentGroup } from './comments';
 import type { ReportData } from '@/types/analysis';
-import { DISTRIBUTION_BANDS, NARRATIVE_THRESHOLDS, POLARIZATION, QUALITY_THRESHOLDS } from './scale';
-import { Finding, FINDING_THRESHOLDS, FindingKind, collectFindings } from './findings';
+import { DISTRIBUTION_BANDS, NARRATIVE_THRESHOLDS } from './scale';
+import {
+  Finding,
+  FINDING_THRESHOLDS,
+  FindingEvidence,
+  FindingKind,
+  collectFindings,
+} from './findings';
 import { ThemeKey, classifyTheme, themeOf } from './themes';
 
 export type Priority = 'عاجلة' | 'عالية' | 'متوسطة' | 'داعمة';
@@ -33,13 +39,9 @@ export interface Recommendation {
   action: string;
   /** لماذا: الأرقام التي استدعت الإجراء */
   rationale: string;
-  /** من ينفّذ */
-  owner: string;
-  /** متى */
-  timeframe: string;
-  /** بماذا يُقاس النجاح */
+  /** بماذا يُقاس النجاح — الوزن النسبي في كل التوصيات */
   indicator: string;
-  /** الهدف الرقمي في الدورة القادمة */
+  /** الهدف الرقمي المعبَّر عنه بالوزن النسبي */
   target: string;
   /** أرقام الأسئلة المشمولة */
   questionNumbers: number[];
@@ -61,12 +63,15 @@ export const MAX_RECOMMENDATIONS = 10;
 /** أقصى عدد نقاط قوة تُذكر؛ ما بعدها تعداد لا توصية */
 export const MAX_STRENGTH_RECOMMENDATIONS = 2;
 
-const PRIORITY_BANDS: ReadonlyArray<{ min: number; label: Priority; timeframe: string }> = [
-  { min: 80, label: 'عاجلة', timeframe: 'خلال شهر' },
-  { min: 60, label: 'عالية', timeframe: 'خلال الفصل الدراسي الحالي' },
-  { min: 40, label: 'متوسطة', timeframe: 'قبل بداية الفصل الدراسي القادم' },
-  { min: -Infinity, label: 'داعمة', timeframe: 'خلال العام الأكاديمي' },
+const PRIORITY_BANDS: ReadonlyArray<{ min: number; label: Priority }> = [
+  { min: 80, label: 'عاجلة' },
+  { min: 60, label: 'عالية' },
+  { min: 40, label: 'متوسطة' },
+  { min: -Infinity, label: 'داعمة' },
 ];
+
+/** المؤشر موحَّد: مقياس واحد يتابَع به كل التوصيات مهما اختلف نوع المشكلة */
+const INDICATOR = 'الوزن النسبي';
 
 function priorityFor(severity: number) {
   return PRIORITY_BANDS.find((band) => severity >= band.min) ?? PRIORITY_BANDS[3];
@@ -87,17 +92,17 @@ const ACTIONS: Partial<Record<FindingKind, Partial<Record<ThemeKey, string>>>> =
     resources:
       'حصر المراجع الناقصة لكل مقرر وتوفيرها ورقياً ورقمياً قبل بدء الفصل، وإتاحة نسخ إلكترونية على المنصة.',
     facilities:
-      'حصر أعطال المعامل والقاعات وإعداد خطة صيانة وإحلال بجدول زمني معلن ومسؤول محدد لكل بند.',
+      'حصر أعطال المعامل والقاعات وإصلاح الأعطال المتكررة، وإحلال الأجهزة التي تجاوزت عمرها التشغيلي.',
     support:
       'تفعيل ساعات الإرشاد الأكاديمي بمواعيد معلنة، وتخصيص مرشد لكل مجموعة طلابية مع سجل متابعة موثّق.',
     administration:
       'إعادة هندسة الإجراء الأبطأ في شؤون الطلاب وتحديد زمن إنجاز معياري لكل معاملة وإعلانه.',
     communication:
-      'نشر المعلومات المطلوبة في دليل الطالب وعلى الموقع والمنصة، وتعيين مسؤول تحديث بمراجعة شهرية.',
+      'نشر المعلومات المطلوبة في دليل الطالب وعلى الموقع والمنصة، وتحديثها كلما تغيّرت.',
     training:
-      'مراجعة اتفاقيات جهات التدريب وتوثيق خطة إشراف بزيارات ميدانية دورية وتقرير لكل متدرب.',
+      'مراجعة اتفاقيات جهات التدريب، وزيارة كل جهة ميدانياً، وتوثيق تقرير لكل متدرب.',
     general:
-      'تشكيل فريق عمل لتحليل أسباب التدني في هذا المجال ووضع خطة تصحيحية بمسؤول وموعد ومؤشر لكل إجراء.',
+      'تحليل أسباب التدني في هذا المجال بمراجعة إجراءاته الحالية ومقارنتها بما تطبقه الأقسام الأعلى تقييماً.',
   },
   polarization: {
     'course-content':
@@ -141,12 +146,12 @@ const ACTIONS: Partial<Record<FindingKind, Partial<Record<ThemeKey, string>>>> =
     training:
       'زيادة عدد جهات التدريب المتاحة وتنويعها، وربط مهام المتدرب بمخرجات تعلم معلنة مسبقاً.',
     general:
-      'وضع خطة تحسين مرحلية للمجال بمؤشرات قياس ربع سنوية ومسؤول متابعة معلن.',
+      'مراجعة إجراءات هذا المجال وتحديد أضعف حلقة فيها ومعالجتها أولاً.',
   },
 };
 
 const FALLBACK_ACTION =
-  'تحليل أسباب النتيجة في هذا المجال ووضع خطة تصحيحية بمسؤول وموعد ومؤشر قياس لكل إجراء.';
+  'مراجعة إجراءات هذا المجال وتحديد أضعف حلقة فيها ومعالجتها أولاً.';
 
 /** ضعف المحور هو مشكلة الضعف نفسها على نطاق أوسع، فيرث إجراءها في المجال */
 const KIND_ALIASES: Partial<Record<FindingKind, FindingKind>> = {
@@ -253,12 +258,25 @@ function bucketize(findings: Finding[]): Bucket[] {
 
 interface RationaleParts {
   text: string;
-  indicator: string;
-  target: string;
 }
 
 /**
- * يبني المبرر والمؤشر والهدف من الأدلة الرقمية وحدها.
+ * هدف واحد لكل توصية، معبَّر عنه بالوزن النسبي.
+ *
+ * كان لكل نوع مشكلة مقياسه: نسبة الرافضين للانقسام، وألفا للثبات، وفارق النقاط
+ * للفجوة بين الفئات. متابعة خطة بستة مقاييس مختلفة لا تُنفَّذ عملياً، فوُحِّدت
+ * على المقياس الذي يراه القارئ أمام كل بند في جدول النتائج.
+ */
+function buildTarget(evidence: FindingEvidence, kind: FindingKind): string {
+  if (kind === 'strength') {
+    return `الحفاظ عليه عند ${NARRATIVE_THRESHOLDS.strength}% فأعلى`;
+  }
+  const weight = round2(evidence.relativeWeight ?? evidence.axisAverage ?? 0);
+  return `رفعه من ${weight}% إلى ${nextBand(weight)}% فأعلى`;
+}
+
+/**
+ * يبني المبرر من الأدلة الرقمية وحدها.
  * كل رقم هنا مأخوذ حرفياً من `evidence`، فلا يمكن أن يظهر رقم بلا أصل.
  */
 function buildRationale(bucket: Bucket, questionNumbers: number[]): RationaleParts {
@@ -269,100 +287,72 @@ function buildRationale(bucket: Bucket, questionNumbers: number[]): RationalePar
     case 'critical-weakness':
     case 'weakness': {
       const weight = evidence.relativeWeight ?? 0;
-      const target = nextBand(weight);
       const scope =
         questionNumbers.length > 1
-          ? `${listQuestions(questionNumbers)} دون عتبة ${NARRATIVE_THRESHOLDS.weakness}%، وأدناها بوزن ${weight}%`
+          ? `${listQuestions(questionNumbers)} دون عتبة ${NARRATIVE_THRESHOLDS.weakness}%، وأدناها ${weight}%`
           : `${listQuestions(questionNumbers)} بوزن نسبي ${weight}%`;
       const tail =
         evidence.negativeShare && evidence.negativeShare > 0
-          ? `، وأبدى ${evidence.negativeShare}% من المشاركين عدم موافقتهم`
+          ? `، ولم يوافق عليها ${evidence.negativeShare}% من المشاركين`
           : '';
-      return {
-        text: `${scope}${tail} (عدد الاستجابات ${evidence.respondents}).`,
-        indicator: 'الوزن النسبي للبنود المذكورة',
-        target: `رفعه من ${weight}% إلى ${target}% فأعلى`,
-      };
+      return { text: `${scope}${tail}.` };
     }
 
     case 'polarization': {
-      const negative = evidence.negativeShare ?? 0;
-      const positive = evidence.positiveShare ?? 0;
       return {
         text:
-          `${listQuestions(questionNumbers)} انقسم الرأي حولها: ${negative}% غير موافقين مقابل ` +
-          `${positive}% موافقين، والوزن النسبي ${evidence.relativeWeight}% لا يكشف هذا الانقسام ` +
-          `(عدد الاستجابات ${evidence.respondents}).`,
-        indicator: 'نسبة غير الموافقين',
-        target: `خفضها من ${negative}% إلى أقل من ${POLARIZATION.endShare}%`,
+          `${listQuestions(questionNumbers)} انقسم الرأي حولها: ` +
+          `${evidence.negativeShare}% غير موافقين مقابل ${evidence.positiveShare}% موافقين، ` +
+          `والوزن النسبي ${evidence.relativeWeight}% لا يكشف هذا الانقسام.`,
       };
     }
 
     case 'negative-tail': {
-      const negative = evidence.negativeShare ?? 0;
       return {
         text:
-          `${listQuestions(questionNumbers)} يرفضها ${negative}% من المشاركين رغم أن وزنها النسبي ` +
-          `${evidence.relativeWeight}% يبدو مقبولاً (عدد الاستجابات ${evidence.respondents}).`,
-        indicator: 'نسبة غير الموافقين',
-        target: `خفضها من ${negative}% إلى أقل من ${POLARIZATION.endShare}%`,
+          `${listQuestions(questionNumbers)} يرفضها ${evidence.negativeShare}% من المشاركين ` +
+          `رغم أن وزنها النسبي ${evidence.relativeWeight}% يبدو مقبولاً.`,
       };
     }
 
     case 'axis-weakness': {
-      const average = evidence.axisAverage ?? 0;
-      const target = nextBand(average);
       const names = bucket.primaryGroup.map((finding) => `«${finding.axisName}»`).join('، ');
       return {
-        text: `متوسط ${names} ${average}% وهو دون عتبة ${FINDING_THRESHOLDS.axisWeakness}%، محسوباً على ${itemsLabel(evidence.items ?? 0)}.`,
-        indicator: 'متوسط الوزن النسبي للمحور',
-        target: `رفعه من ${average}% إلى ${target}% فأعلى`,
+        text: `متوسط ${names} ${evidence.axisAverage}% وهو دون عتبة ${FINDING_THRESHOLDS.axisWeakness}%، محسوباً على ${itemsLabel(evidence.items ?? 0)}.`,
       };
     }
 
     case 'group-gap': {
-      const gap = evidence.gap ?? 0;
       const [lower, higher] = evidence.categories ?? ['', ''];
       return {
         text:
-          `فجوة ${gap} نقطة بين فئتي «${higher}» و«${lower}» في محور «${worst.axisName}»، ` +
+          `فجوة ${evidence.gap} نقطة بين فئتي «${higher}» و«${lower}» في محور «${worst.axisName}»، ` +
           `وأدنى الفئتين عند ${evidence.axisAverage}%.`,
-        indicator: 'الفارق بين أعلى فئة وأدناها',
-        target: `تقليصه من ${gap} نقطة إلى أقل من ${FINDING_THRESHOLDS.groupGap} نقاط`,
       };
     }
 
     case 'low-reliability': {
-      const alpha = evidence.alpha ?? 0;
       return {
         text:
-          `ألفا كرونباخ لمحور «${worst.axisName}» ${alpha}، أي أن بنوده لا تقيس بعداً واحداً ` +
-          `متماسكاً، فمتوسطه ${evidence.axisAverage}% أضعف دلالة مما يبدو.`,
-        indicator: 'معامل ألفا للمحور',
-        target: `رفعه من ${alpha} إلى ${QUALITY_THRESHOLDS.minimumAlpha} فأعلى بعد مراجعة صياغة البنود`,
+          `ألفا كرونباخ لمحور «${worst.axisName}» ${evidence.alpha}، أي أن بنوده لا تقيس بعداً ` +
+          `واحداً متماسكاً، فمتوسطه ${evidence.axisAverage}% أضعف دلالة مما يبدو.`,
       };
     }
 
     case 'low-response': {
-      const rate = evidence.responseRate ?? 0;
       return {
-        text: `${listQuestions(questionNumbers)} أجاب عنها ${rate}% فقط من المشاركين، ما يشير إلى غموض الصياغة أو حساسية الموضوع.`,
-        indicator: 'معدل الاستجابة على البند',
-        target: `رفعه من ${rate}% إلى ${QUALITY_THRESHOLDS.minimumResponseRate}% فأعلى بعد إعادة الصياغة`,
+        text: `${listQuestions(questionNumbers)} أجاب عنها ${evidence.responseRate}% فقط من المشاركين، ما يشير إلى غموض الصياغة أو حساسية الموضوع.`,
       };
     }
 
     case 'strength': {
-      const weight = evidence.relativeWeight ?? 0;
       return {
-        text: `${listQuestions(questionNumbers)} حصلت على ${weight}% ووافق عليها ${evidence.positiveShare}% من المشاركين.`,
-        indicator: 'الوزن النسبي للبنود المذكورة',
-        target: `الحفاظ عليه عند ${NARRATIVE_THRESHOLDS.strength}% فأعلى`,
+        text: `${listQuestions(questionNumbers)} حصلت على ${evidence.relativeWeight}% ووافق عليها ${evidence.positiveShare}% من المشاركين.`,
       };
     }
 
     default:
-      return { text: '', indicator: '', target: '' };
+      return { text: '' };
   }
 }
 
@@ -407,14 +397,14 @@ const KIND_ACTION_OVERRIDE: Partial<Record<FindingKind, string>> = {
   strength:
     'توثيق الممارسة التي أنتجت هذه النتيجة ونشرها على بقية الأقسام كممارسة مرجعية.',
   'group-gap':
-    'تحليل أسباب الفجوة بين الفئتين وتوجيه التدخل للفئة الأدنى تحديداً بدل خطة موحدة للجميع.',
+    'تحليل أسباب الفجوة بين الفئتين وتوجيه المعالجة للفئة الأدنى تحديداً بدل إجراء موحّد للجميع.',
 };
 
 /** لواحق تُضاف للإجراء حين تصاحب المشكلةَ الأساسية إشارةٌ من نوع آخر */
 const SECONDARY_ACTION_SUFFIX: Partial<Record<FindingKind, string>> = {
   polarization:
     ' وقبل التنفيذ، استطلع الفئة الرافضة لتحديد سبب الانقسام، فالمتوسط وحده لا يدل عليه.',
-  'group-gap': ' ووجّه التدخل للفئة الأدنى تحديداً بدل خطة موحدة للجميع.',
+  'group-gap': ' ووجّه المعالجة للفئة الأدنى تحديداً بدل إجراء موحّد للجميع.',
   'low-reliability': ' وراجع صياغة بنود المحور قبل الاعتماد على متوسطه في القياس القادم.',
   'low-response': ' وأعد صياغة البند الأقل استجابةً بلغة أوضح.',
 };
@@ -435,8 +425,8 @@ const KIND_ORDER: FindingKind[] = [
   'strength',
 ];
 
-/** أقصى عدد إشارات ثانوية تُذكر في مبرر واحد قبل أن يصير فقرة لا سطراً */
-const MAX_SECONDARY_CLAUSES = 2;
+/** إشارة ثانوية واحدة تكفي: المبرر سطر يُقرأ في اجتماع، لا فقرة تُدرَس */
+const MAX_SECONDARY_CLAUSES = 1;
 
 export function buildRecommendations(data: ReportData): Recommendation[] {
   const findings = collectFindings(data);
@@ -445,7 +435,6 @@ export function buildRecommendations(data: ReportData): Recommendation[] {
   const recommendations = bucketize(findings).map((bucket) => {
     const severity = bucket.primary.severity;
     const band = priorityFor(severity);
-    const theme = themeOf(bucket.theme);
 
     // أرقام الأسئلة في المبرر الأساسي تخص نوع المشكلة الأشدّ وحده، وإلا وصف
     // النص بنداً بأنه «دون العتبة» وهو ليس كذلك
@@ -506,10 +495,8 @@ export function buildRecommendations(data: ReportData): Recommendation[] {
       severity: round2(severity),
       action,
       rationale,
-      owner: theme.owner,
-      timeframe: band.timeframe,
-      indicator: parts.indicator,
-      target: parts.target,
+      indicator: INDICATOR,
+      target: buildTarget(bucket.primary.evidence, bucket.primary.kind),
       questionNumbers: allQuestions,
       quotes: quotesForTheme(bucket.theme, data.comments),
     } satisfies Recommendation;

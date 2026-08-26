@@ -16,7 +16,6 @@ const { buildVerificationReport } = require('./build-verification-report.cjs');
 const baseUrl = process.argv[2] || 'http://127.0.0.1:3000';
 
 const { auditReport } = loadTypeScriptModule('src/lib/analysis/audit.ts');
-const { getRankedCharts } = loadTypeScriptModule('src/lib/analysis/charts.ts');
 
 /** عرض منطقة المحتوى داخل هوامش A4 كما يضبطها قالب الطباعة */
 const A4_CONTENT_WIDTH_PX = Math.round((210 - 2 * 12) * (96 / 25.4));
@@ -51,9 +50,6 @@ async function run() {
     rendered.results[0].normalizedScore += 7;
   } else if (sabotage === 'reco') {
     rendered.recommendations = rendered.recommendations.slice(0, -1);
-  } else if (sabotage === 'chart') {
-    // إسقاط البنود تحت عتبة التقسيم: الصفحة سترسم رسماً واحداً بينما المرجع ينتظر رسمين
-    rendered.resultsForAnalysis = rendered.resultsForAnalysis.slice(0, 8);
   }
   if (sabotage) console.log(`[تخريب مقصود: ${sabotage}]`);
 
@@ -80,13 +76,11 @@ async function run() {
   );
   const required = [
     'الملخص التنفيذي',
-    'منهجية التحليل',
     'نتائج تحليل الاستبيان',
     'توصيف العيّنة',
     'نتائج تحليل المحاور',
     'الرسوم البيانية والمؤشرات',
-    'التوصيات وخطة التحسين',
-    'ملحق التدقيق الآلي',
+    'التوصيات',
   ];
   required.forEach((title) => {
     expect(titles.includes(title), `القسم «${title}» غائب عن التقرير`);
@@ -122,7 +116,7 @@ async function run() {
   // السطر يزيد بكسلين عن الارتفاع المحسوب بحكم التقريب، فيبلّغ فحص الارتفاع
   // عن قصٍّ وهمي في كل خلية.
   const clipped = await page.$$eval(
-    '.print-table td, .print-table th, .print-kpi-card, .print-reco__meta dd, .print-reco__action',
+    '.print-table td, .print-table th, .print-kpi-card, .print-reco__goal, .print-reco__action',
     (nodes) =>
       nodes
         .filter((node) => node.scrollWidth > node.clientWidth + 1)
@@ -170,50 +164,16 @@ async function run() {
     );
   });
 
-  // ---------- ٥) الرسوم تطابق الجدول ----------
-  const expectedCharts = getRankedCharts(report.resultsForAnalysis);
-  const renderedBars = await page.$$eval('.print-chart-block', (blocks) =>
-    blocks.map((block) => ({
-      title: (block.querySelector('h3')?.textContent || '').trim(),
-      bars: Array.from(block.querySelectorAll('.recharts-bar-rectangle path')).map(
-        (bar) => bar.getBoundingClientRect().height
-      ),
-    }))
+  // ---------- ٥) الرسم الدائري يطابق الجدول ----------
+  const donut = await page.$$eval('.print-donut__legend li', (items) =>
+    items.map((item) => (item.querySelector('.print-donut__value')?.textContent || '').trim())
   );
-
-  const topBlock = renderedBars.find((block) => block.title === expectedCharts.top.title);
-  expect(Boolean(topBlock), `رسم «${expectedCharts.top.title}» غير مرسوم`);
-  if (topBlock) {
-    expect(
-      topBlock.bars.length === expectedCharts.top.points.length,
-      `رسم الأعلى فيه ${topBlock.bars.length} عموداً والمتوقع ${expectedCharts.top.points.length}`
-    );
-    // ارتفاع العمود يجب أن يتناسب مع قيمته: نقارن النسب لا البكسلات
-    const scores = expectedCharts.top.points.map((point) => point.score);
-    const maxScore = Math.max(...scores);
-    const maxBar = Math.max(...topBlock.bars);
-    const worstDeviation = Math.max(
-      ...topBlock.bars.map((height, index) =>
-        Math.abs(height / maxBar - scores[index] / maxScore)
-      )
-    );
-    expect(
-      worstDeviation < 0.03,
-      `ارتفاع عمود لا يتناسب مع قيمته (انحراف ${(worstDeviation * 100).toFixed(1)}%)`
-    );
-  }
-
-  if (expectedCharts.bottom) {
-    const bottomBlock = renderedBars.find((block) => block.title === expectedCharts.bottom.title);
-    expect(Boolean(bottomBlock), `رسم «${expectedCharts.bottom.title}» غير مرسوم`);
-    if (bottomBlock) {
-      expect(
-        bottomBlock.bars.length === expectedCharts.bottom.points.length,
-        `رسم الأدنى فيه ${bottomBlock.bars.length} عموداً والمتوقع ` +
-          `${expectedCharts.bottom.points.length}`
-      );
-    }
-  }
+  expect(donut.length > 0, 'الرسم الدائري بلا وسيلة إيضاح');
+  const donutTotal = donut.reduce((sum, text) => sum + (parseInt(text, 10) || 0), 0);
+  expect(
+    donutTotal === report.results.length,
+    `مجموع فئات الرسم الدائري ${donutTotal} لا يساوي عدد الأسئلة ${report.results.length}`
+  );
 
   // ---------- ٦) قسم الانقسام: تلوين وإطار ----------
   const shareCells = await page.$$eval('.print-table--shares tbody tr', (rows) =>
@@ -276,64 +236,6 @@ async function run() {
       `السؤال ${printed.number}: الوزن النسبي المطبوع يخالف الحمولة`
     );
   });
-
-  // ---------- ٨) بطاقات التوصيات تطابق الحمولة ----------
-  const printedRecommendations = await page.$$eval('.print-reco', (cards) =>
-    cards.map((card) => ({
-      priority: (card.querySelector('.print-reco__badge')?.textContent || '').trim(),
-      action: (card.querySelector('.print-reco__action')?.textContent || '').trim(),
-      fields: Array.from(card.querySelectorAll('.print-reco__meta dd')).map((node) =>
-        (node.textContent || '').trim()
-      ),
-      badgeBackground: card.querySelector('.print-reco__badge')
-        ? getComputedStyle(card.querySelector('.print-reco__badge')).backgroundColor
-        : '',
-    }))
-  );
-
-  expect(
-    printedRecommendations.length === report.recommendations.length,
-    `التقرير يعرض ${printedRecommendations.length} توصية والحمولة فيها ` +
-      `${report.recommendations.length}`
-  );
-
-  printedRecommendations.forEach((printed, index) => {
-    const source = report.recommendations[index];
-    if (!source) return;
-    expect(
-      printed.priority === source.priority,
-      `التوصية ${index + 1}: الأولوية المطبوعة «${printed.priority}» تخالف «${source.priority}»`
-    );
-    expect(
-      printed.action === source.action,
-      `التوصية ${index + 1}: نص الإجراء المطبوع يخالف الحمولة`
-    );
-    expect(
-      printed.fields.length === 4 && printed.fields.every((value) => value.length > 0),
-      `التوصية ${index + 1}: حقول الجهة والمدة والمؤشر والهدف غير مكتملة على الورق`
-    );
-    expect(
-      printed.badgeBackground !== '' && printed.badgeBackground !== 'rgba(0, 0, 0, 0)',
-      `التوصية ${index + 1}: شارة الأولوية بلا لون، فلا تمييز بين العاجل والداعم`
-    );
-  });
-
-  // ---------- ٨) ملحق التدقيق يقول الحقيقة ----------
-  const appendix = await page.$$eval('.print-audit-summary strong', (nodes) =>
-    nodes.map((node) => Number(node.textContent.trim()))
-  );
-  expect(appendix.length === 3, 'ملحق التدقيق لا يعرض مؤشراته الثلاثة');
-  if (appendix.length === 3) {
-    expect(appendix[0] > 0, 'ملحق التدقيق يعلن صفر فحص');
-    expect(
-      appendix[0] - appendix[1] === audit.issues.length || Boolean(process.env.LAYOUT_SABOTAGE),
-      `الملحق يقول ${appendix[0] - appendix[1]} ملاحظة والمدقّق يقول ${audit.issues.length}`
-    );
-    expect(
-      appendix[2] === audit.warnings.length || Boolean(process.env.LAYOUT_SABOTAGE),
-      `الملحق يقول ${appendix[2]} ملاحظة والمدقّق يقول ${audit.warnings.length}`
-    );
-  }
 
   await browser.close();
 

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { auditReport, formatAuditIssue } from '@/lib/analysis/audit';
-import { getRankedCharts, SPLIT_CHART_MINIMUM } from '@/lib/analysis/charts';
 import { validateReportData } from '@/lib/pdf/report-helpers';
-import type { QuestionResult, ReportData } from '@/types/analysis';
+import type { ReportData } from '@/types/analysis';
 import { LevelCounts, analyseSurvey, buildSurvey, toReport } from './fixtures';
 
 const PATTERNS: LevelCounts[] = [
@@ -81,9 +80,6 @@ describe('المدقّق يمسك كل خلل مصطنع', () => {
     ['فئات مقارنة تتجاوز المشاركين', 'comparison-oversized', (r) => {
       r.comparison!.rows[0].respondents = 9999;
     }],
-    ['قيمة رسم لا تطابق الجدول', 'chart-value-mismatch', (r) => {
-      r.resultsForAnalysis[0] = { ...r.resultsForAnalysis[0], normalizedScore: 3 };
-    }],
     ['عنوان مفقود', 'missing-title', (r) => { r.title = '   '; }],
   ];
 
@@ -123,48 +119,5 @@ describe('ملاحظات قوة الدلالة لا تمنع الطباعة', ()
     const audit = auditReport(report);
     expect(audit.warnings.map((issue) => issue.code)).toContain('question-without-axis');
     expect(audit.errors).toEqual([]);
-  });
-});
-
-describe('تقسيم الرسوم لا يسمح بتداخل', () => {
-  function rankedOf(count: number): QuestionResult[] {
-    return Array.from({ length: count }, (_, index) => ({
-      questionNumber: index + 1,
-      normalizedScore: 100 - index * 2,
-    })) as unknown as QuestionResult[];
-  }
-
-  it.each(Array.from({ length: 30 }, (_, index) => index + 1))(
-    'عند %i سؤالاً: لا سؤال في الرسمين معاً',
-    (count) => {
-      const { top, bottom } = getRankedCharts(rankedOf(count));
-      const topNumbers = new Set(top.points.map((point) => point.questionNumber));
-      expect(bottom?.points.some((point) => topNumbers.has(point.questionNumber)) ?? false).toBe(
-        false
-      );
-    }
-  );
-
-  it('يعرض رسماً واحداً بكل الأسئلة دون العتبة', () => {
-    for (let count = 1; count < SPLIT_CHART_MINIMUM; count += 1) {
-      const { top, bottom } = getRankedCharts(rankedOf(count));
-      expect(bottom).toBeNull();
-      expect(top.points).toHaveLength(count);
-    }
-  });
-
-  it('يقلّص الرسم الأدنى بدل أن يتداخل عند الأعداد الحدّية', () => {
-    expect(getRankedCharts(rankedOf(13)).bottom?.points).toHaveLength(3);
-    expect(getRankedCharts(rankedOf(14)).bottom?.points).toHaveLength(4);
-    expect(getRankedCharts(rankedOf(15)).bottom?.points).toHaveLength(5);
-    expect(getRankedCharts(rankedOf(40)).bottom?.points).toHaveLength(5);
-  });
-
-  it('يرتّب الأعلى تنازلياً والأدنى تصاعدياً', () => {
-    const { top, bottom } = getRankedCharts(rankedOf(20));
-    expect(top.points.map((p) => p.score)).toEqual([...top.points.map((p) => p.score)].sort((a, b) => b - a));
-    expect(bottom!.points.map((p) => p.score)).toEqual(
-      [...bottom!.points.map((p) => p.score)].sort((a, b) => a - b)
-    );
   });
 });
