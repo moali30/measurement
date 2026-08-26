@@ -219,7 +219,6 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
     const rowValues: Array<number | null> = [];
     const textAnswers: string[] = [];
     const outOfScale: number[] = [];
-    let missing = 0;
 
     const pushNumber = (num: number) => {
       if (num >= ANALYSIS_SCALE.min && num <= ANALYSIS_SCALE.max) {
@@ -234,7 +233,6 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
     data.forEach((row) => {
       const val = row[question];
       if (val === undefined || val === null || val === '') {
-        missing += 1;
         rowValues.push(null);
         return;
       }
@@ -246,7 +244,6 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
 
       const cleanVal = String(val).trim();
       if (!cleanVal) {
-        missing += 1;
         rowValues.push(null);
         return;
       }
@@ -279,7 +276,12 @@ function parseColumns(data: Record<string, unknown>[], options: ProcessOptions):
         questionNumber: questionNumberFrom(question, index),
         values,
         rowValues,
-        missing,
+        // يُشتق من الصفوف لا يُعدّ يدوياً: كل صف يدفع مدخلاً واحداً في
+        // `rowValues`، فما ليس قيمة صالحة فهو مفقود بالضرورة. العدّ اليدوي كان
+        // يغفل الإجابة النصية الشاذة داخل عمود ليكرت — كسؤال نعم/لا وُسم ليكرت
+        // بالخطأ — فينكسر ثابت «الصالح + المفقود = المشاركين» ويُرفض التقرير
+        // برسالة لا تدل على السبب.
+        missing: rowValues.length - values.length,
         outOfScale,
       });
       return;

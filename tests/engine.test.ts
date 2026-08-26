@@ -166,6 +166,24 @@ describe('حراسة السُّلَّم — قرار معلن لا قيمة تُ
     expect(result.analysisErrors.map((error) => error.code)).toEqual(['values-out-of-scale']);
   });
 
+  it('إجابة نصية شاذة داخل بند ليكرت تُعدّ مفقودة لا تُهمَل', () => {
+    // سؤال نعم/لا وُسم ليكرت بالخطأ يترك إجابات لا يقرؤها الترميز. إغفالها
+    // يكسر ثابت «الصالح + المفقود = المشاركين» فيُرفض التقرير برسالة لا تدل
+    // على السبب، مع أن العلاج هو تصحيح نوع السؤال.
+    const rows = rowsFor(QUESTION, [6, 4, 0, 0, 0]);
+    rows[0] = { [QUESTION]: 'نعم' };
+    const result = processData(rows, [], { [QUESTION]: 'likert' }, [], {
+      questionOptionCounts: { [QUESTION]: 5 },
+      questionValueMaps: { [QUESTION]: VALUE_MAP },
+    });
+
+    expect(result.analysisErrors).toEqual([]);
+    const item = result.results[0];
+    expect(item.count).toBe(9);
+    expect(item.missing).toBe(1);
+    expect(item.count + item.missing).toBe(result.totalRespondents);
+  });
+
   it('بيانات بلا بند ليكرت واحد ترفض التحليل', () => {
     const result = processData([{ 'أ. النوع': 'ذكر' }], [], { 'أ. النوع': 'radio' }, []);
     expect(result.analysisErrors.map((error) => error.code)).toEqual(['no-likert-questions']);
