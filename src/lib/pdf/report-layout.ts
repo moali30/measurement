@@ -1,4 +1,5 @@
 import { ReportData } from '@/types/analysis';
+import { getPolarizedResults } from '@/lib/pdf/report-helpers';
 
 export type ReportDensity = 'spacious' | 'balanced' | 'compact';
 
@@ -36,7 +37,10 @@ export function getReportLayoutProfile(data: ReportData): ReportLayoutProfile {
   const contentScore =
     data.results.length * 1.7 +
     data.axes.length * 1.25 +
-    (data.binaryResults?.length ?? 0) * 0.8 +
+    // قسم انقسام الآراء وجدول توصيف العيّنة يشغلان صفوفاً حقيقية، فيجب أن
+    // يدخلا حساب الكثافة وإلا خرج التقرير أطول مما قدّره اختيار التخطيط.
+    (data.sampleProfile?.reduce((sum, group) => sum + group.values.length, 0) ?? 0) * 0.7 +
+    getPolarizedResults(data.results).length * 0.9 +
     textLoad(data.autoComment, 180) +
     textLoad(data.manualComment, 180) +
     questionCharacters / 170 +

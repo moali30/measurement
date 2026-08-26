@@ -1,24 +1,35 @@
 import {
+  AnalysisError,
   AnalysisWarning,
   Axis,
   CategoryComparison,
   QuestionResult,
   ReportData,
+  SampleProfileGroup,
 } from '../types/analysis';
+import type { Recommendation } from './analysis/recommendations';
 import { aggregateCommentGroups } from './analysis/comments';
 import { NARRATIVE_THRESHOLDS, generateAxisComment } from './analysis/narrative';
-import { ANALYSIS_SCALE } from './analysis/scale';
+import { ANALYSIS_SCALE, POLARIZATION } from './analysis/scale';
+import { buildRecommendations } from './analysis/recommendations';
 import {
   assignCompetitionRanks,
   computeCronbachAlpha,
   computeDescriptiveStats,
   computeDistribution,
+  computeNormalizedScore,
+  computeOpinionShares,
   computeRelativeWeight,
-  detectScaleMax,
   reverseCode,
 } from './analysis/statistics';
 
-/** ترجمة الاستجابات النصية العربية إلى قيم رقمية */
+/**
+ * ترجمة الاستجابات النصية العربية إلى قيم رقمية.
+ *
+ * «نعم» و«لا» ليستا هنا عمداً: السؤال ذو الإجابتين ليس مقياس ليكرت، وترميزه
+ * 5 و1 كان يُدخله التحليل الكمي كأنه سؤال خماسي متطرف. صار متغيراً ديموغرافياً
+ * يوصَف في جدول العيّنة ويصلح للمقارنة بين الفئات.
+ */
 const LIKERT_MAP: Record<string, number> = {
   'موافق جداً': 5, 'موافق جدا': 5,
   'موافق': 4,
@@ -35,30 +46,37 @@ const LIKERT_MAP: Record<string, number> = {
   'أحياناً': 3, 'أحيانا': 3,
   'نادراً': 2, 'نادرا': 2,
   'أبداً': 1, 'أبدا': 1,
-  'نعم': 5,
-  'لا': 1,
 };
 
-/**
- * الاستجابات الثنائية. تُرصد عند التحويل لا بعده: قيمتا 1 و5 وحدهما لا تكفيان
- * للحكم بأن السؤال ثنائي، فقد يكون سؤالاً خماسياً اختار الجميع طرفيه.
- */
-const BINARY_ANSWERS = new Set(['نعم', 'لا']);
+/** النوع الوحيد الذي يدخل التحليل الكمي */
+const LIKERT_TYPE = 'likert';
 
-/** أنواع الأسئلة التي لا تدخل التحليل الكمي أصلاً */
-const NON_ANALYTIC_TYPES = ['radio', 'select', 'dropdown', 'multiple_choice', 'checkbox'];
+/** أنواع تصف العيّنة ولا تُقيَّم: تدخل جدول التوصيف والفلترة والمقارنة */
+const DEMOGRAPHIC_TYPES = [
+  'radio',
+  'select',
+  'dropdown',
+  'multiple_choice',
+  'checkbox',
+  'yes_no',
+];
+
+/** أنواع كمية لكنها ليست ليكرت — خارج التحليل مع توثيق الاستبعاد */
+const EXCLUDED_TYPES = ['rating', 'linear_scale', 'number', 'date', 'file', 'matrix'];
+
+const TEXT_TYPES = ['text', 'textarea'];
+
+/** أقصى عدد فئات يجعل عموداً نصياً في ملف Excel متغيراً ديموغرافياً لا تعليقاً */
+const MAX_DEMOGRAPHIC_CATEGORIES = 12;
+const MAX_DEMOGRAPHIC_LABEL_LENGTH = 40;
 
 export interface ProcessOptions {
   questionTypes?: Record<string, string>;
   commentQuestions?: string[];
   /** أسئلة يكون فيها أدنى تقدير هو الأفضل، فتُعاد ترميزها قبل الحساب */
   reversedQuestions?: string[];
-  /** تثبيت السُّلَّم يدوياً بدل اكتشافه من البيانات */
-  scaleMaxOverride?: number;
-  /** توصيف السُّلَّم لكل سؤال كما هو مخزّن في النموذج */
-  questionScaleMax?: Record<string, number>;
-  /** الحد الأدنى الفعلي لكل سؤال، ويدعم المقاييس الخطية التي تبدأ من صفر */
-  questionScaleMin?: Record<string, number>;
+  /** عدد بدائل كل سؤال ليكرت كما هو مخزّن في النموذج — للتحقق لا للحساب */
+  questionOptionCounts?: Record<string, number>;
   /** ترميز خيارات السؤال بالترتيب المخزّن في النموذج */
   questionValueMaps?: Record<string, Record<string, number>>;
   /** عمود التصنيف الذي تُبنى عليه المقارنة بين الفئات */
@@ -72,26 +90,34 @@ interface ParsedColumn {
   /** قيمة كل مشارك في موضعه الأصلي؛ null للقيمة المفقودة أو غير الرقمية */
   rowValues: Array<number | null>;
   missing: number;
-  /** كم قيمة جاءت من إجابة نعم/لا */
-  binaryHits: number;
+  /** قيم رقمية وقعت خارج المقياس الخماسي — تمنع إنتاج التقرير */
+  outOfScale: number[];
 }
 
-type ProcessResult = Pick<
-  ReportData,
-  | 'results'
-  | 'resultsForAnalysis'
-  | 'overallAverage'
-  | 'axes'
-  | 'autoComment'
-  | 'comments'
-  | 'binaryResults'
-  | 'totalRespondents'
-  | 'scaleMax'
-  | 'overallCronbachAlpha'
-  | 'cronbachRespondents'
-  | 'comparison'
-  | 'analysisWarnings'
->;
+interface ParsedData {
+  columns: ParsedColumn[];
+  commentGroups: { question: string; answers: string[] }[];
+  demographics: SampleProfileGroup[];
+}
+
+export interface ProcessResult {
+  results: QuestionResult[];
+  resultsForAnalysis: QuestionResult[];
+  overallAverage: number;
+  overallNormalized: number;
+  axes: Axis[];
+  autoComment: string;
+  comments: ReportData['comments'];
+  sampleProfile: SampleProfileGroup[];
+  totalRespondents: number;
+  overallCronbachAlpha?: number;
+  cronbachRespondents?: number;
+  comparison?: CategoryComparison;
+  recommendations: Recommendation[];
+  analysisWarnings: AnalysisWarning[];
+  /** أخطاء توقف إنتاج التقرير — تُعرض للمستخدم ولا تُحفظ في التقرير */
+  analysisErrors: AnalysisError[];
+}
 
 /** يستخرج رقم السؤال من بادئة عنوان العمود، وإلا فترتيبه */
 function questionNumberFrom(question: string, index: number): number {
@@ -99,46 +125,95 @@ function questionNumberFrom(question: string, index: number): number {
   return match ? parseInt(match[1], 10) : index + 1;
 }
 
+function stripNumberPrefix(question: string): string {
+  return question.replace(/^\d+\.\s*/, '');
+}
+
+/** يبني توصيف فئة واحدة من قيم عمود ديموغرافي */
+function buildDemographicGroup(
+  question: string,
+  rawValues: string[]
+): SampleProfileGroup | undefined {
+  if (rawValues.length === 0) return undefined;
+
+  const counts = new Map<string, number>();
+  rawValues.forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+
+  const answered = rawValues.length;
+  const values = Array.from(counts.entries())
+    .map(([label, count]) => ({
+      label,
+      count,
+      percentage: parseFloat(((count / answered) * 100).toFixed(2)),
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ar'));
+
+  return { column: question, answered, values };
+}
+
 /**
- * يقرأ كل أعمدة البيانات مرة واحدة: يفصل الأسئلة الكمية عن النصية، ويحوّل
- * الاستجابات النصية إلى أرقام، ويعدّ القيم المفقودة لكل سؤال.
+ * يقرأ كل أعمدة البيانات مرة واحدة ويوزعها على ثلاثة مسارات:
+ * بنود ليكرت الكمية، متغيرات ديموغرافية توصف العيّنة، وتعليقات نصية.
  */
-function parseColumns(
-  data: Record<string, unknown>[],
-  options: ProcessOptions
-): { columns: ParsedColumn[]; commentGroups: { question: string; answers: string[] }[] } {
+function parseColumns(data: Record<string, unknown>[], options: ProcessOptions): ParsedData {
   const { questionTypes, commentQuestions } = options;
   const questions = Object.keys(data[0] || {});
   const columns: ParsedColumn[] = [];
   const commentGroups: { question: string; answers: string[] }[] = [];
+  const demographics: SampleProfileGroup[] = [];
 
   // قائمة أسئلة التعليقات تصل من واجهة مربّعات اختيار تعرض كل الأعمدة،
-  // فوجودها — حتى فارغة — يعني أن المستخدم حسم أمر كل عمود. عمود نصي لم يختره
-  // يجب ألّا يُطبع بتاتاً. بدون هذا التمييز كان عمود «الاسم» — وهو بلا قيم
-  // رقمية — يسقط في الاستثناء أدناه وتُطبع أسماء المشاركين رغم إزالة علامة الصح.
-  // غياب القائمة (undefined) يبقى على الاكتشاف التلقائي للمستدعين القدامى.
+  // فوجودها — حتى فارغة — يعني أن المستخدم حسم أمر كل عمود.
   const hasExplicitCommentSelection = Array.isArray(commentQuestions);
+
+  const textValuesOf = (question: string): string[] =>
+    data
+      .map((row) => row[question])
+      .filter((v) => v !== undefined && v !== null && v !== '')
+      .map((v) => String(v).trim())
+      .filter(Boolean);
 
   questions.forEach((question, index) => {
     const qType = questionTypes?.[question];
 
-    if (qType && NON_ANALYTIC_TYPES.includes(qType)) return;
-
     // سؤال حدّده المستخدم كتعليق — يخرج من التحليل الكمي كلياً
     if (commentQuestions?.includes(question)) {
-      const texts = data
-        .map((row) => row[question])
-        .filter((v) => v !== undefined && v !== null && v !== '')
-        .map((v) => String(v).trim());
+      const texts = textValuesOf(question);
       if (texts.length > 0) commentGroups.push({ question, answers: texts });
+      return;
+    }
+
+    if (qType && DEMOGRAPHIC_TYPES.includes(qType)) {
+      const group = buildDemographicGroup(question, textValuesOf(question));
+      if (group) demographics.push(group);
+      return;
+    }
+
+    if (qType && EXCLUDED_TYPES.includes(qType)) return;
+
+    if (qType && TEXT_TYPES.includes(qType)) {
+      const texts = textValuesOf(question);
+      if (texts.length > 0 && !hasExplicitCommentSelection) {
+        commentGroups.push({ question, answers: texts });
+      }
       return;
     }
 
     const values: number[] = [];
     const rowValues: Array<number | null> = [];
     const textAnswers: string[] = [];
+    const outOfScale: number[] = [];
     let missing = 0;
-    let binaryHits = 0;
+
+    const pushNumber = (num: number) => {
+      if (num >= ANALYSIS_SCALE.min && num <= ANALYSIS_SCALE.max) {
+        values.push(num);
+        rowValues.push(num);
+      } else {
+        outOfScale.push(num);
+        rowValues.push(null);
+      }
+    };
 
     data.forEach((row) => {
       const val = row[question];
@@ -149,13 +224,7 @@ function parseColumns(
       }
 
       if (typeof val === 'number') {
-        if (qType === 'text' || qType === 'textarea') {
-          textAnswers.push(String(val));
-          rowValues.push(null);
-        } else {
-          values.push(val);
-          rowValues.push(val);
-        }
+        pushNumber(val);
         return;
       }
 
@@ -166,61 +235,70 @@ function parseColumns(
         return;
       }
 
-      if (qType === 'text' || qType === 'textarea') {
-        textAnswers.push(cleanVal);
-        rowValues.push(null);
-        return;
-      }
-
       const mapped = options.questionValueMaps?.[question]?.[cleanVal] ?? LIKERT_MAP[cleanVal];
       if (mapped !== undefined) {
-        values.push(mapped);
-        rowValues.push(mapped);
-        if (BINARY_ANSWERS.has(cleanVal)) binaryHits += 1;
+        pushNumber(mapped);
         return;
       }
 
       const num = parseFloat(cleanVal);
       if (!Number.isNaN(num)) {
-        values.push(num);
-        rowValues.push(num);
+        pushNumber(num);
       } else {
         textAnswers.push(cleanVal);
         rowValues.push(null);
       }
     });
 
-    if (values.length > 0) {
+    if (values.length > 0 || outOfScale.length > 0) {
       columns.push({
         question,
         questionNumber: questionNumberFrom(question, index),
         values,
         rowValues,
         missing,
-        binaryHits,
+        outOfScale,
       });
-    } else if (textAnswers.length > 0 && !hasExplicitCommentSelection) {
-      commentGroups.push({ question, answers: textAnswers });
+      return;
+    }
+
+    // عمود نصي بلا نوع معلن — مصدره ملف Excel. عدد فئات صغير يعني متغيراً
+    // ديموغرافياً (النوع، المستوى، الشعبة)؛ النصوص الطويلة المتنوعة تعليقات.
+    if (textAnswers.length > 0) {
+      const distinct = new Set(textAnswers);
+      const looksCategorical =
+        distinct.size <= MAX_DEMOGRAPHIC_CATEGORIES &&
+        Array.from(distinct).every((label) => label.length <= MAX_DEMOGRAPHIC_LABEL_LENGTH);
+
+      if (looksCategorical) {
+        const group = buildDemographicGroup(question, textAnswers);
+        if (group) demographics.push(group);
+      } else if (!hasExplicitCommentSelection) {
+        commentGroups.push({ question, answers: textAnswers });
+      }
     }
   });
 
-  return { columns, commentGroups };
+  return { columns, commentGroups, demographics };
 }
 
-/** يحوّل عموداً مقروءاً إلى نتيجة سؤال كاملة الإحصاءات */
+/** يحوّل عموداً مقروءاً إلى نتيجة سؤال كاملة الإحصاءات على السُّلَّم الخماسي */
 function buildQuestionResult(
   column: ParsedColumn,
-  scaleMin: number,
-  scaleMax: number,
   totalRespondents: number,
   isReversed: boolean
 ): QuestionResult {
+  const { min: scaleMin, max: scaleMax } = ANALYSIS_SCALE;
   const values = isReversed
     ? column.values.map((v) => reverseCode(v, scaleMax, scaleMin))
     : column.values;
 
   const stats = computeDescriptiveStats(values);
-  const isBinary = column.binaryHits > 0 && column.binaryHits === column.values.length;
+  const shares = computeOpinionShares(values, scaleMin, scaleMax);
+  // من المجموع لا من stats.mean: المتوسط المعروض مقرَّب لمنزلتين، وضرب خطأ
+  // التقريب في مدى السُّلَّم (×25 هنا) كان يزيح المؤشر المعياري حتى 0.13 نقطة
+  // فيتناقض مع الوزن النسبي المحسوب من المجموع نفسه.
+  const exactMean = stats.count > 0 ? stats.sum / stats.count : scaleMin;
 
   return {
     question: column.question,
@@ -228,6 +306,7 @@ function buildQuestionResult(
     count: stats.count,
     mean: stats.mean,
     relativeWeight: computeRelativeWeight(stats.sum, stats.count, scaleMax),
+    normalizedScore: computeNormalizedScore(exactMean, scaleMin, scaleMax),
     stdDev: stats.stdDev,
     median: stats.median,
     mode: stats.mode,
@@ -239,92 +318,16 @@ function buildQuestionResult(
     scaleMax,
     scaleMin,
     distribution: computeDistribution(values, scaleMax, scaleMin),
-    ...(isBinary ? { isBinary: true } : {}),
+    negativeShare: shares.negative,
+    neutralShare: shares.neutral,
+    positiveShare: shares.positive,
     ...(isReversed ? { isReversed: true } : {}),
   };
 }
 
-/**
- * النواة الحسابية: تُستدعى مرة للتقرير كله، ومرة لكل فئة عند بناء جدول المقارنة.
- * لذلك لا تعرف شيئاً عن المحاور ولا عن النصوص التفسيرية.
- */
 interface ScoredColumn {
   result: QuestionResult;
   rowValues: Array<number | null>;
-}
-
-function observedMaximum(values: number[]): number | undefined {
-  const maximum = values.reduce((current, value) =>
-    Number.isFinite(value) && value > current ? value : current
-  , -Infinity);
-  return Number.isFinite(maximum) ? maximum : undefined;
-}
-
-/**
- * يطابق السُلَّم الوصفي مع البيانات القديمة قبل الحساب.
- *
- * لو كانت الإجابات الفعلية تصل إلى 5 بينما وصف السؤال يقول 3، فاستعمال 3
- * مقاماً ينتج نسبة تتجاوز 100%. نرفع السُلَّم إلى أقرب مدى قياسي يغطي البيانات
- * ونعلن ذلك في التقرير؛ لا نسمح للخلل الوصفي أن يتحول إلى نتيجة مستحيلة.
- */
-function reconcileScale(
-  column: ParsedColumn,
-  configuredScale: number | undefined,
-  scaleMin: number,
-  inferredScale: number,
-  warnings: AnalysisWarning[]
-): number {
-  let scaleMax = configuredScale !== undefined && configuredScale > scaleMin
-    ? configuredScale
-    : inferredScale;
-  const maximum = observedMaximum(column.values);
-
-  if (maximum !== undefined && maximum > scaleMax) {
-    const promoted = detectScaleMax([maximum]);
-    warnings.push({
-      code: 'scale-promoted',
-      question: column.question,
-      questionNumber: column.questionNumber,
-      message:
-        `وصف السُلَّم كان ${scaleMax} بينما أعلى قيمة مرصودة ${maximum}. ` +
-        `استُخدم السُلَّم ${promoted} تلقائياً لمنع نسبة غير صحيحة.`,
-    });
-    scaleMax = promoted;
-  }
-
-  return scaleMax;
-}
-
-/** يستبعد القيم غير الصالحة بعد حسم السُلَّم ويحتفظ بمحاذاة صفوف المشاركين. */
-function sanitizeColumn(
-  column: ParsedColumn,
-  scaleMin: number,
-  scaleMax: number,
-  warnings: AnalysisWarning[]
-): ParsedColumn {
-  let invalidCount = 0;
-  const rowValues = column.rowValues.map((value) => {
-    if (value === null) return null;
-    if (Number.isFinite(value) && value >= scaleMin && value <= scaleMax) return value;
-    invalidCount += 1;
-    return null;
-  });
-
-  if (invalidCount === 0) return column;
-
-  warnings.push({
-    code: 'invalid-values-excluded',
-    question: column.question,
-    questionNumber: column.questionNumber,
-    message: `استُبعدت ${invalidCount} قيمة خارج النطاق ${scaleMin}-${scaleMax}.`,
-  });
-
-  return {
-    ...column,
-    values: rowValues.filter((value): value is number => value !== null),
-    rowValues,
-    missing: column.missing + invalidCount,
-  };
 }
 
 function reliabilityForColumns(columns: ScoredColumn[]) {
@@ -336,89 +339,116 @@ function reliabilityForColumns(columns: ScoredColumn[]) {
   return computeCronbachAlpha(rows);
 }
 
-function computeCore(
-  data: Record<string, unknown>[],
-  options: ProcessOptions,
-  forcedScaleByQuestion?: Record<string, number>,
-  forcedScaleMinByQuestion?: Record<string, number>
-) {
-  const totalRespondents = data.length;
-  const { columns, commentGroups } = parseColumns(data, options);
+/**
+ * يتحقق من صلاحية كل عمود قبل الحساب.
+ *
+ * لا نصلّح ولا نخمّن: السُّلَّم قرار المصمم لا خاصية في البيانات. سؤال ليكرت
+ * ببدائل غير خمس، أو قيمة خارج 1-5، يعني خللاً في النموذج أو في الملف؛
+ * وحسابه بصمت ينتج نسبة خاطئة تبدو سليمة تماماً.
+ */
+function collectErrors(columns: ParsedColumn[], options: ProcessOptions): AnalysisError[] {
+  const errors: AnalysisError[] = [];
 
-  const reversed = new Set(options.reversedQuestions ?? []);
-  const scaleByQuestion: Record<string, number> = {};
-  const scaleMinByQuestion: Record<string, number> = {};
-  const warnings: AnalysisWarning[] = [];
+  columns.forEach((column) => {
+    const declaredOptions = options.questionOptionCounts?.[column.question];
+    const isLikert = options.questionTypes?.[column.question] === LIKERT_TYPE;
 
-  // السُّلَّم المُستنتَج يُحسب من كل الأسئلة مجتمعةً، لا من كل سؤال على حدة.
-  // الاستنتاج لكل سؤال منفرداً كان يعطي كل سؤال مقاماً مختلفاً حسب أعلى إجابة
-  // وصلته، فتصبح الأسئلة غير قابلة للمقارنة والترتيب والمتوسط العام بلا معنى.
-  // الأسئلة الثنائية مستبعدة من الاستنتاج لأن مداها ليس مدى السُّلَّم.
-  const pooledValues = columns
-    .filter((column) => column.binaryHits !== column.values.length)
-    .reduce<number[]>((all, column) => all.concat(column.values), []);
-  const inferredScale = detectScaleMax(pooledValues, options.scaleMaxOverride);
+    if (isLikert && declaredOptions !== undefined && declaredOptions !== ANALYSIS_SCALE.points) {
+      errors.push({
+        code: 'non-standard-likert',
+        question: column.question,
+        questionNumber: column.questionNumber,
+        message:
+          `السؤال ${column.questionNumber} «${stripNumberPrefix(column.question)}» مخزَّن بـ ` +
+          `${declaredOptions} بدائل بينما التحليل يعتمد ${ANALYSIS_SCALE.label}. ` +
+          `عدّل بدائل السؤال في النموذج إلى خمسة ثم أعد التحليل.`,
+      });
+    }
 
-  const scoredColumns: ScoredColumn[] = columns.map((column) => {
-    // توصيف السؤال المخزَّن في النموذج هو المرجع الأدق؛ الاستنتاج آخر ملاذ
-    const configuredScale =
-      options.scaleMaxOverride ??
-      forcedScaleByQuestion?.[column.question] ??
-      options.questionScaleMax?.[column.question];
-    const configuredMin =
-      forcedScaleMinByQuestion?.[column.question] ??
-      options.questionScaleMin?.[column.question] ??
-      ANALYSIS_SCALE.min;
-    const scaleMin = Number.isFinite(configuredMin) && configuredMin < (configuredScale ?? inferredScale)
-      ? configuredMin
-      : ANALYSIS_SCALE.min;
-    const scaleMax = reconcileScale(column, configuredScale, scaleMin, inferredScale, warnings);
-    const validColumn = sanitizeColumn(column, scaleMin, scaleMax, warnings);
-    const isReversed = reversed.has(column.question);
-    scaleByQuestion[column.question] = scaleMax;
-    scaleMinByQuestion[column.question] = scaleMin;
-
-    return {
-      result: buildQuestionResult(validColumn, scaleMin, scaleMax, totalRespondents, isReversed),
-      rowValues: validColumn.rowValues.map((value) =>
-        value !== null && isReversed ? reverseCode(value, scaleMax, scaleMin) : value
-      ),
-    };
+    if (column.outOfScale.length > 0) {
+      const highest = column.outOfScale.reduce(
+        (max, value) => (value > max ? value : max),
+        -Infinity
+      );
+      const lowest = column.outOfScale.reduce(
+        (min, value) => (value < min ? value : min),
+        Infinity
+      );
+      errors.push({
+        code: 'values-out-of-scale',
+        question: column.question,
+        questionNumber: column.questionNumber,
+        message:
+          `السؤال ${column.questionNumber} «${stripNumberPrefix(column.question)}» فيه ` +
+          `${column.outOfScale.length} قيمة خارج المقياس ${ANALYSIS_SCALE.min}-${ANALYSIS_SCALE.max} ` +
+          `(من ${lowest} إلى ${highest}). إن لم يكن سؤال ليكرت فاستبعده بتحديده ضمن أعمدة التعليقات.`,
+      });
+    }
   });
 
-  const all = scoredColumns.map((column) => column.result);
+  return errors;
+}
 
-  const results = all
-    .filter((r) => !r.isBinary && r.count > 0)
+/** استبعادات موثقة داخل التقرير لا توقفه */
+function collectExclusionWarnings(options: ProcessOptions): AnalysisWarning[] {
+  const types = options.questionTypes ?? {};
+  return Object.entries(types)
+    .filter(
+      ([question, type]) =>
+        EXCLUDED_TYPES.includes(type) && !options.commentQuestions?.includes(question)
+    )
+    .map(([question]) => ({
+      code: 'question-excluded' as const,
+      question,
+      message:
+        `استُبعد «${stripNumberPrefix(question)}» من التحليل الكمي لأنه ليس سؤال ليكرت خماسياً؛ ` +
+        `المتوسط العام يقتصر على بنود ${ANALYSIS_SCALE.label}.`,
+    }));
+}
+
+/**
+ * النواة الحسابية: تُستدعى مرة للتقرير كله، ومرة لكل فئة عند بناء جدول المقارنة.
+ * لذلك لا تعرف شيئاً عن المحاور ولا عن النصوص التفسيرية.
+ */
+function computeCore(data: Record<string, unknown>[], options: ProcessOptions) {
+  const totalRespondents = data.length;
+  const { columns, commentGroups, demographics } = parseColumns(data, options);
+  const reversed = new Set(options.reversedQuestions ?? []);
+
+  const scoredColumns: ScoredColumn[] = columns
+    .filter((column) => column.values.length > 0)
+    .map((column) => {
+      const isReversed = reversed.has(column.question);
+      return {
+        result: buildQuestionResult(column, totalRespondents, isReversed),
+        rowValues: column.rowValues.map((value) =>
+          value !== null && isReversed
+            ? reverseCode(value, ANALYSIS_SCALE.max, ANALYSIS_SCALE.min)
+            : value
+        ),
+      };
+    });
+
+  const results = scoredColumns
+    .map((column) => column.result)
     .sort((a, b) => a.questionNumber - b.questionNumber);
-  const binaryResults = all
-    .filter((r) => r.isBinary && r.count > 0)
-    .sort((a, b) => a.questionNumber - b.questionNumber);
-  const analyticColumns = scoredColumns.filter(
-    (column) => !column.result.isBinary && column.result.count > 0
-  );
-  const reliability = reliabilityForColumns(analyticColumns);
-  const scaleMax =
+  const reliability = reliabilityForColumns(scoredColumns);
+
+  const meanOf = (pick: (item: QuestionResult) => number) =>
     results.length > 0
-      ? Math.max(...results.map((result) => result.scaleMax))
-      : ANALYSIS_SCALE.max;
-
-  const totalWeight = results.reduce((sum, item) => sum + item.relativeWeight, 0);
-  const overallAverage =
-    results.length > 0 ? parseFloat((totalWeight / results.length).toFixed(2)) : 0;
+      ? parseFloat((results.reduce((sum, item) => sum + pick(item), 0) / results.length).toFixed(2))
+      : 0;
 
   return {
+    columns,
     results,
-    binaryResults,
-    overallAverage,
-    scaleMax,
+    overallAverage: meanOf((item) => item.relativeWeight),
+    overallNormalized: meanOf((item) => item.normalizedScore),
     totalRespondents,
     commentGroups,
-    scoredColumns: analyticColumns,
-    scaleByQuestion,
-    scaleMinByQuestion,
+    demographics,
+    scoredColumns,
     reliability,
-    warnings,
   };
 }
 
@@ -429,9 +459,7 @@ function computeCore(
 function computeCategoryComparison(
   data: Record<string, unknown>[],
   axes: Axis[],
-  options: ProcessOptions,
-  scaleByQuestion: Record<string, number>,
-  scaleMinByQuestion: Record<string, number>
+  options: ProcessOptions
 ): CategoryComparison | undefined {
   const column = options.comparisonColumn;
   if (!column || axes.length === 0) return undefined;
@@ -456,7 +484,7 @@ function computeCategoryComparison(
   };
 
   const rows = Array.from(groups.entries()).map(([category, categoryRows]) => {
-    const core = computeCore(categoryRows, scopedOptions, scaleByQuestion, scaleMinByQuestion);
+    const core = computeCore(categoryRows, scopedOptions);
     const categoryAxes = processAxesAverages(core.results, axes);
 
     return {
@@ -485,25 +513,41 @@ export function processData(
 ): ProcessResult {
   const options: ProcessOptions = { questionTypes, commentQuestions, ...extraOptions };
 
-  if (!data || data.length === 0) {
-    return {
-      results: [],
-      resultsForAnalysis: [],
-      overallAverage: 0,
-      axes: currentAxes,
-      autoComment: generateAutoComment([], 0, currentAxes),
-      comments: [],
-      binaryResults: [],
-      totalRespondents: 0,
-      scaleMax: undefined,
-      overallCronbachAlpha: undefined,
-      cronbachRespondents: undefined,
-      comparison: undefined,
-      analysisWarnings: [],
-    };
-  }
+  const empty: ProcessResult = {
+    results: [],
+    resultsForAnalysis: [],
+    overallAverage: 0,
+    overallNormalized: 0,
+    axes: currentAxes,
+    autoComment: generateAutoComment([], 0, currentAxes),
+    comments: [],
+    sampleProfile: [],
+    totalRespondents: 0,
+    overallCronbachAlpha: undefined,
+    cronbachRespondents: undefined,
+    comparison: undefined,
+    recommendations: [],
+    analysisWarnings: [],
+    analysisErrors: [],
+  };
+
+  if (!data || data.length === 0) return empty;
 
   const core = computeCore(data, options);
+  const errors = collectErrors(core.columns, options);
+
+  if (core.results.length === 0) {
+    errors.push({
+      code: 'no-likert-questions',
+      message: `لا توجد بنود ${ANALYSIS_SCALE.label} صالحة للتحليل في هذه البيانات.`,
+    });
+  }
+
+  // خطأ واحد يكفي لإيقاف التقرير: نتيجة محسوبة على سُلَّم خاطئ أسوأ من غياب
+  // التقرير، لأنها تبدو صحيحة ولا شيء في الصفحة يكشف الخلل.
+  if (errors.length > 0) {
+    return { ...empty, totalRespondents: core.totalRespondents, analysisErrors: errors };
+  }
 
   const resultsForAnalysis = assignCompetitionRanks(core.results, (r) => r.relativeWeight);
   // الرتبة تُنسخ إلى الجدول المرتب برقم السؤال حتى يظهر العمودان متسقين
@@ -513,7 +557,9 @@ export function processData(
   const axesWithAverages =
     currentAxes.length > 0 ? processAxesAverages(results, currentAxes) : currentAxes;
   const axes = axesWithAverages.map((axis) => {
-    const axisColumns = core.scoredColumns.filter((column) => questionBelongsToAxis(column.result, axis));
+    const axisColumns = core.scoredColumns.filter((column) =>
+      questionBelongsToAxis(column.result, axis)
+    );
     const reliability = reliabilityForColumns(axisColumns);
     return reliability
       ? {
@@ -530,26 +576,31 @@ export function processData(
       message: `المحور «${axis.name}» لا يطابق أي سؤال محلل.`,
     }));
 
-  return {
+  const comments = aggregateCommentGroups(core.commentGroups);
+  const comparison = computeCategoryComparison(data, axes, options);
+
+  const summary = {
     results,
     resultsForAnalysis,
     overallAverage: core.overallAverage,
+    overallNormalized: core.overallNormalized,
     axes,
-    autoComment: generateAutoComment(resultsForAnalysis, core.overallAverage, axes),
-    comments: aggregateCommentGroups(core.commentGroups),
-    binaryResults: core.binaryResults,
+    comments,
+    sampleProfile: core.demographics,
     totalRespondents: core.totalRespondents,
-    scaleMax: core.scaleMax,
     overallCronbachAlpha: core.reliability?.alpha,
     cronbachRespondents: core.reliability?.respondents,
-    comparison: computeCategoryComparison(
-      data,
-      axes,
-      options,
-      core.scaleByQuestion,
-      core.scaleMinByQuestion
-    ),
-    analysisWarnings: [...core.warnings, ...axisWarnings],
+    comparison,
+  };
+
+  return {
+    ...summary,
+    autoComment: generateAutoComment(resultsForAnalysis, core.overallAverage, axes),
+    // التوصيات تُبنى أخيراً لأنها تقرأ كل ما سبق: البنود والمحاور والمقارنة
+    // والتعليقات معاً. بناؤها داخل الحساب كان سيجعلها ترى نصف الصورة.
+    recommendations: buildRecommendations(summary as unknown as ReportData),
+    analysisWarnings: [...collectExclusionWarnings(options), ...axisWarnings],
+    analysisErrors: [],
   };
 }
 
@@ -561,14 +612,43 @@ function questionBelongsToAxis(item: QuestionResult, axis: Axis): boolean {
 export function processAxesAverages(results: QuestionResult[], axes: Axis[]): Axis[] {
   const withAverages = axes.map((axis) => {
     const axisQuestions = results.filter((item) => questionBelongsToAxis(item, axis));
-    const totalWeight = axisQuestions.reduce((sum, item) => sum + item.relativeWeight, 0);
-    const average = parseFloat(
-      (axisQuestions.length > 0 ? totalWeight / axisQuestions.length : 0).toFixed(2)
-    );
-    return { ...axis, average, count: axisQuestions.length };
+    const mean = (pick: (item: QuestionResult) => number) =>
+      parseFloat(
+        (axisQuestions.length > 0
+          ? axisQuestions.reduce((sum, item) => sum + pick(item), 0) / axisQuestions.length
+          : 0
+        ).toFixed(2)
+      );
+
+    return {
+      ...axis,
+      average: mean((item) => item.relativeWeight),
+      normalizedAverage: mean((item) => item.normalizedScore),
+      count: axisQuestions.length,
+    };
   });
 
   return assignCompetitionRanks(withAverages, (axis) => axis.average);
+}
+
+/**
+ * الأسئلة التي انقسم الرأي حولها: طرفا التوزيع معاً فوق العتبة.
+ *
+ * مرتبة تنازلياً حسب الطرف الأصغر، لأن أشدّ انقسام هو ما تتقارب فيه الكتلتان
+ * لا ما يكبر فيه أحد الطرفين وحده.
+ */
+export function getPolarizedQuestions(results: QuestionResult[]): QuestionResult[] {
+  return results
+    .filter(
+      (item) =>
+        item.count > 0 &&
+        item.negativeShare >= POLARIZATION.endShare &&
+        item.positiveShare >= POLARIZATION.endShare
+    )
+    .sort(
+      (a, b) =>
+        Math.min(b.negativeShare, b.positiveShare) - Math.min(a.negativeShare, a.positiveShare)
+    );
 }
 
 export { generateAxisComment };
@@ -582,7 +662,11 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#039;');
 }
 
-export function generateAutoComment(results: QuestionResult[], average: number, axes: Axis[]): string {
+export function generateAutoComment(
+  results: QuestionResult[],
+  average: number,
+  axes: Axis[]
+): string {
   if (!results || results.length === 0) {
     return `
       <div class="detailed-analysis bg-green-50/50 border-r-4 border-green-700 p-4 rounded-xl my-4 text-gray-800 dark:text-gray-200 dark:bg-green-900/20">
@@ -597,15 +681,10 @@ export function generateAutoComment(results: QuestionResult[], average: number, 
     .filter((r) => r.relativeWeight >= NARRATIVE_THRESHOLDS.strength)
     .map((r) => r.questionNumber);
   const weaknesses = results.filter((r) => r.relativeWeight < NARRATIVE_THRESHOLDS.weakness);
+  const polarized = getPolarizedQuestions(results);
 
-  const perfComment = average >= 85 ? 'أداء متميز' : average >= 70 ? 'أداء جيد' : 'أداء يحتاج إلى تحسين';
-
-  // أكثر الأسئلة تشتتاً — إشارة إلى انقسام في الرأي لا يظهره المتوسط وحده
-  const normalizedDispersion = (item: QuestionResult) =>
-    item.stdDev / Math.max(1, item.scaleMax - (item.scaleMin ?? ANALYSIS_SCALE.min));
-  const mostDivisive = [...results].sort(
-    (a, b) => normalizedDispersion(b) - normalizedDispersion(a)
-  )[0];
+  const perfComment =
+    average >= 85 ? 'أداء متميز' : average >= 70 ? 'أداء جيد' : 'أداء يحتاج إلى تحسين';
 
   let comment = `
     <div class="detailed-analysis bg-green-50/50 border-r-4 border-green-700 p-4 rounded-xl my-4 text-gray-800 dark:text-gray-200 dark:bg-green-900/20">
@@ -614,18 +693,31 @@ export function generateAutoComment(results: QuestionResult[], average: number, 
       <p>أعلى سؤال تقييماً هو "${escapeHtml(highest.question)}" (رقم ${highest.questionNumber}) بنسبة ${highest.relativeWeight}%.</p>
       <p>أقل سؤال تقييماً هو "${escapeHtml(lowest.question)}" (رقم ${lowest.questionNumber}) بنسبة ${lowest.relativeWeight}%.</p>`;
 
-  if (mostDivisive && mostDivisive.stdDev > 0) {
-    comment += `<p>أكثر الأسئلة تبايناً في الآراء هو "${escapeHtml(mostDivisive.question)}" (انحراف معياري ${mostDivisive.stdDev})، مما يشير إلى تفاوت واضح في تقييم المشاركين له.</p>`;
-  }
-
   if (strengths.length > 0) {
-    comment += `<p><b>نقاط القوة (أعلى من ${NARRATIVE_THRESHOLDS.strength}%):</b> الأسئلة ${strengths.slice(0, 5).join(', ')}.</p>`;
+    comment += `<p><b>نقاط القوة (أعلى من ${NARRATIVE_THRESHOLDS.strength}%):</b> الأسئلة ${strengths
+      .slice(0, 5)
+      .join(', ')}.</p>`;
   }
   if (weaknesses.length > 0) {
     comment += `<p><b>نقاط تحتاج لتحسين (أقل من ${NARRATIVE_THRESHOLDS.weakness}%):</b> الأسئلة ${weaknesses
       .slice(0, 5)
       .map((r) => r.questionNumber)
       .join(', ')}.</p>`;
+  }
+
+  // الانقسام لا يظهر في المتوسط إطلاقاً: نصف رافض ونصف موافق يعطي نفس متوسط
+  // عيّنة كلها محايدة. لذلك يُذكر صراحةً بنسبتي الطرفين لا بالانحراف المعياري،
+  // الذي لا يقول شيئاً للقارئ غير المتخصص.
+  if (polarized.length > 0) {
+    const sample = polarized.slice(0, 3);
+    comment += `<p><b>انقسام في الآراء (${polarized.length} ${
+      polarized.length === 1 ? 'سؤال' : 'أسئلة'
+    }):</b> ${sample
+      .map(
+        (r) =>
+          `السؤال ${r.questionNumber} (${r.negativeShare}% غير موافق مقابل ${r.positiveShare}% موافق)`
+      )
+      .join('، ')}. المتوسط وحده لا يكشف هذه الأسئلة، وتفاصيلها في قسم انقسام الآراء.</p>`;
   }
 
   if (axes.length > 0 && axes[0].average !== undefined) {
@@ -659,23 +751,6 @@ export function generateAutoComment(results: QuestionResult[], average: number, 
           <p>محور "${escapeHtml(highestAxis.name)}" ${generateAxisComment(highestAxis.average || 0)}.</p>
           <p>محور "${escapeHtml(lowestAxis.name)}" ${generateAxisComment(lowestAxis.average || 0)}.</p>
         </div>
-      </div>`;
-  }
-
-  if (weaknesses.length > 0) {
-    comment += `
-      <div class="detailed-analysis bg-blue-50/50 border-r-4 border-blue-700 p-4 rounded-xl my-4 text-gray-800 dark:text-gray-200 dark:bg-blue-900/20">
-        <h4 class="font-bold mb-2 text-blue-800 dark:text-blue-400">التوصيات وخطة التحسين المبدئية</h4>
-        <p class="mb-2">بناءً على النتائج التي حصلت على تقييم أقل من ${NARRATIVE_THRESHOLDS.weakness}%، نوصي بالآتي:</p>
-        <ul class="list-disc list-inside space-y-1">
-          ${weaknesses
-            .slice(0, 5)
-            .map(
-              (r) =>
-                `<li>مراجعة الأسباب المؤدية لتدني تقييم <strong>"${escapeHtml(r.question)}"</strong> (نسبة ${r.relativeWeight}%) ووضع خطة تصحيحية فورية.</li>`
-            )
-            .join('')}
-        </ul>
       </div>`;
   }
 

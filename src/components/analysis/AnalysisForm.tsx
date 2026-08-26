@@ -9,13 +9,25 @@ import { listSignaturesServer } from '@/app/actions/signatures';
 import { readImageAsCompressedDataUrl, readImageUrlAsCompressedDataUrl } from '@/lib/image-utils';
 import { toast } from 'sonner';
 
+/**
+ * أنواع الأسئلة التي تصف العيّنة ولا تُقيّم.
+ * تصلح للفلترة وللمقارنة بين الفئات، ولا تدخل المتوسط العام.
+ */
+const DEMOGRAPHIC_QUESTION_TYPES = [
+  'radio',
+  'select',
+  'dropdown',
+  'multiple_choice',
+  'checkbox',
+  'yes_no',
+];
+
 /** خيارات المحرك التي يضبطها المستخدم قبل توليد التقرير */
 export interface AnalysisEngineOptions {
   reversedQuestions: string[];
   comparisonColumn?: string;
-  scaleMaxOverride?: number;
-  questionScaleMax?: Record<string, number>;
-  questionScaleMin?: Record<string, number>;
+  /** عدد بدائل كل سؤال ليكرت — يتحقق منه المحرك ولا يحسب به */
+  questionOptionCounts?: Record<string, number>;
   questionValueMaps?: Record<string, Record<string, number>>;
 }
 
@@ -70,9 +82,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
   // خيارات المحرك
   const [reversedQuestions, setReversedQuestions] = useState<string[]>([]);
   const [comparisonColumn, setComparisonColumn] = useState('');
-  const [scaleMaxOverride, setScaleMaxOverride] = useState('');
-  const [questionScaleMax, setQuestionScaleMax] = useState<Record<string, number>>({});
-  const [questionScaleMin, setQuestionScaleMin] = useState<Record<string, number>>({});
+  const [questionOptionCounts, setQuestionOptionCounts] = useState<Record<string, number>>({});
   const [questionValueMaps, setQuestionValueMaps] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
@@ -182,8 +192,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         // --- Process Raw Data and Filters immediately ---
         const rawData: Record<string, unknown>[] = [];
         const qTypes: Record<string, string> = {};
-        const qScales: Record<string, number> = {};
-        const qScaleMins: Record<string, number> = {};
+        const qOptionCounts: Record<string, number> = {};
         const qValueMaps: Record<string, Record<string, number>> = {};
         const filterableCols: {column: string, values: string[]}[] = [];
         
@@ -205,33 +214,20 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         analysisQuestions.forEach((q: Record<string, unknown>) => {
             const key = questionKey(q);
             qTypes[key] = q.type as string;
-            const explicitMax = Number(q.maxValue);
-            const explicitMin = Number(q.minValue);
             const optionLabels = Array.isArray(q.options)
               ? q.options.map((option) => String(option).trim()).filter(Boolean)
               : [];
-            const optionsCount = optionLabels.length;
-            // في أسئلة ليكرت، البدائل التي يراها المشارك هي مصدر الحقيقة.
-            // maxValue قد يبقى من نوع سؤال سابق أو من نموذج قديم، وتفضيله على
-            // عدد البدائل كان يجعل خمس إجابات تُحلل على سُلَّم من ثلاث درجات.
-            if (q.type === 'likert' && optionsCount > 1) {
-              qScales[key] = optionsCount;
-              qScaleMins[key] = 1;
+            // البدائل التي يراها المشارك هي مصدر الترميز. عددها يُرسل للمحرك
+            // ليتحقق من مطابقته للمقياس الخماسي، لا ليُستعمل سُلَّماً متغيراً.
+            if (q.type === 'likert' && optionLabels.length > 1) {
+              qOptionCounts[key] = optionLabels.length;
               qValueMaps[key] = Object.fromEntries(
-                optionLabels.map((option, index) => [option, optionsCount - index])
+                optionLabels.map((option, index) => [option, optionLabels.length - index])
               );
-            } else if (
-              Number.isFinite(explicitMax) &&
-              Number.isFinite(explicitMin) &&
-              explicitMax > explicitMin
-            ) {
-              qScales[key] = explicitMax;
-              qScaleMins[key] = explicitMin;
-            } else if (Number.isFinite(explicitMax) && explicitMax > 1) {
-              qScales[key] = explicitMax;
-              qScaleMins[key] = 1;
             }
-            if (['radio', 'select', 'dropdown', 'multiple_choice'].includes(q.type as string)) {
+            // نعم/لا متغير ديموغرافي مثل بقية أسئلة الاختيار، فيصلح للفلترة
+            // والمقارنة بين الفئات؛ استبعاده كان يخرجه من التقرير تماماً.
+            if (DEMOGRAPHIC_QUESTION_TYPES.includes(q.type as string)) {
                 filterableCols.push({ column: key, values: [] });
             }
         });
@@ -247,7 +243,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                row[key] = ans.numberValue !== null && ans.numberValue !== undefined ? ans.numberValue : ans.textValue;
                
                // Collect unique values for filterable columns
-               if (['radio', 'select', 'dropdown', 'multiple_choice'].includes(q.type as string) && row[key]) {
+               if (DEMOGRAPHIC_QUESTION_TYPES.includes(q.type as string) && row[key]) {
                    const fCol = filterableCols.find(f => f.column === key);
                    if (fCol && !fCol.values.includes(row[key] as string)) {
                        fCol.values.push(row[key] as string);
@@ -262,8 +258,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         
         setLoadedRawData(rawData);
         setQuestionTypes(qTypes);
-        setQuestionScaleMax(qScales);
-        setQuestionScaleMin(qScaleMins);
+        setQuestionOptionCounts(qOptionCounts);
         setQuestionValueMaps(qValueMaps);
         setAvailableFilters(filterableCols.filter(f => f.values.length > 0));
         setActiveFilters({});
@@ -332,8 +327,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
                 
                 setLoadedRawData(rawData);
                 setQuestionTypes({});
-                setQuestionScaleMax({});
-                setQuestionScaleMin({});
+                setQuestionOptionCounts({});
                 setQuestionValueMaps({});
                 setAvailableFilters(filterableCols);
                 setActiveFilters({});
@@ -432,15 +426,12 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
         const options = parsed.analysisOptions as {
           reversedQuestions?: unknown;
           comparisonColumn?: unknown;
-          scaleMaxOverride?: unknown;
         };
         setReversedQuestions(
           Array.isArray(options.reversedQuestions) ? options.reversedQuestions.map(String) : []
         );
         setComparisonColumn(typeof options.comparisonColumn === 'string' ? options.comparisonColumn : '');
-        setScaleMaxOverride(
-          typeof options.scaleMaxOverride === 'number' ? String(options.scaleMaxOverride) : ''
-        );
+        // إعدادات قديمة قد تحمل scaleMaxOverride — تُتجاهل: السُّلَّم ثابت الآن
       }
 
       toast.success('تم تحميل إعدادات التقرير. راجع مصدر البيانات ثم أنشئ التقرير.');
@@ -490,7 +481,6 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
       analysisOptions: {
         reversedQuestions,
         comparisonColumn: comparisonColumn || undefined,
-        scaleMaxOverride: scaleMaxOverride ? Number(scaleMaxOverride) : undefined,
       }
     };
 
@@ -522,9 +512,7 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
 
     onGenerate(baseData, finalData, questionTypes, commentQuestions, {
       reversedQuestions,
-      scaleMaxOverride: scaleMaxOverride ? Number(scaleMaxOverride) : undefined,
-      questionScaleMax,
-      questionScaleMin,
+      questionOptionCounts,
       questionValueMaps,
       // عمود المقارنة لا معنى له لو صُفّي إلى قيمة واحدة
       comparisonColumn:
@@ -737,25 +725,6 @@ export default function AnalysisForm({ onGenerate, isLoading }: AnalysisFormProp
               </select>
             </div>
           )}
-
-          <div className="mb-8">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              سُلَّم القياس
-            </label>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-              اتركه تلقائياً لاستخدام توصيف كل سؤال أو اكتشافه من البيانات، وثبّته يدوياً إذا كان ملف Excel لا يحتوي توصيف السُّلَّم.
-            </p>
-            <select
-              value={scaleMaxOverride}
-              onChange={(e) => setScaleMaxOverride(e.target.value)}
-              className="w-full md:w-2/3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">تلقائي — لكل سؤال</option>
-              {[3, 4, 5, 7, 10].map((value) => (
-                <option key={value} value={value}>تثبيت السُّلَّم على {value} درجات</option>
-              ))}
-            </select>
-          </div>
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">

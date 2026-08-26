@@ -7,14 +7,6 @@
 
 import { ANALYSIS_SCALE } from './scale';
 
-/**
- * السلالم الشائعة التي نقرّب إليها عند اكتشاف السُّلَّم تلقائياً.
- *
- * تبدأ من السُّلَّم الافتراضي ولا تنزل تحته: عدم اختيار أحد لأعلى تقدير ليس
- * دليلاً على أن السُّلَّم أقصر، والنزول يضخّم الوزن النسبي بصمت.
- */
-const STANDARD_SCALES = [5, 7, 10] as const;
-
 export interface DistributionSlice {
   /** قيمة الاستجابة (1، 2، 3 …) */
   value: number;
@@ -40,30 +32,6 @@ export interface CronbachAlphaResult {
   /** عدد الاستجابات المكتملة التي دخلت الحساب */
   respondents: number;
   items: number;
-}
-
-/**
- * يكتشف أقصى قيمة في سُلَّم القياس.
- *
- * محافظ عن قصد: ما دامت أعلى قيمة مرصودة ضمن السُّلَّم الافتراضي نُبقيه، ولا
- * نستنتج سُلَّماً أقصر أبداً. الاستنتاج لأسفل كان ينتج أرقاماً خاطئة صامتة —
- * سؤال أجاب عنه الجميع بـ«محايد» (3 من 5) كان يُحسب على سُلَّم من 3 فيظهر
- * بوزن نسبي 100%. نرفع السُّلَّم فقط حين تتجاوزه البيانات فعلاً.
- *
- * السُّلَّم الأقصر (رباعي أو ثلاثي) يُضبط يدوياً من واجهة التحليل، ويُعلَن في
- * صفحة منهجية التقرير.
- */
-export function detectScaleMax(values: number[], override?: number): number {
-  if (override && override > 1) return override;
-  if (values.length === 0) return ANALYSIS_SCALE.max;
-
-  // reduce بدل Math.max(...values) لأن النشر على آلاف القيم يخاطر بتجاوز المكدس
-  const observedMax = values.reduce((max, value) => (value > max ? value : max), -Infinity);
-  if (!Number.isFinite(observedMax) || observedMax <= ANALYSIS_SCALE.max) {
-    return ANALYSIS_SCALE.max;
-  }
-
-  return STANDARD_SCALES.find((scale) => observedMax <= scale) ?? Math.ceil(observedMax);
 }
 
 /** يعكس ترميز سؤال عكسي: أفضل إجابة تصبح أعلى قيمة */
@@ -208,6 +176,65 @@ export function computeDistribution(
       count,
       percentage: total > 0 ? round2((count / total) * 100) : 0,
     }));
+}
+
+/**
+ * توزيع الاستجابات على ثلاث فئات رأي: رافض / محايد / موافق.
+ *
+ * الفئات تُشتق من موضع القيمة بالنسبة لمنتصف السُّلَّم، لا من أرقام مكتوبة يدوياً،
+ * حتى تبقى صحيحة لو تغيّر السُّلَّم يوماً. النسب من الاستجابات الصالحة لا من
+ * إجمالي المشاركين، لأن المفقود ليس رأياً.
+ */
+export interface OpinionShares {
+  negative: number;
+  neutral: number;
+  positive: number;
+}
+
+export function computeOpinionShares(
+  values: number[],
+  scaleMin: number = ANALYSIS_SCALE.min,
+  scaleMax: number = ANALYSIS_SCALE.max
+): OpinionShares {
+  const total = values.length;
+  if (total === 0) return { negative: 0, neutral: 0, positive: 0 };
+
+  const midpoint = (scaleMin + scaleMax) / 2;
+  let negative = 0;
+  let neutral = 0;
+  let positive = 0;
+
+  values.forEach((value) => {
+    if (value < midpoint) negative += 1;
+    else if (value > midpoint) positive += 1;
+    else neutral += 1;
+  });
+
+  return {
+    negative: round2((negative / total) * 100),
+    neutral: round2((neutral / total) * 100),
+    positive: round2((positive / total) * 100),
+  };
+}
+
+/**
+ * المؤشر المعياري: موضع المتوسط بين أدنى السُّلَّم وأعلاه، معبَّراً عنه من 100.
+ *
+ * الوزن النسبي يقسم على الحد الأعلى وحده، فأرضيته 20% على السُّلَّم الخماسي لا
+ * صفر — أسوأ تقييم ممكن يظهر 20% والحياد التام يظهر 60%. هذا المؤشر يقيس
+ * المسافة من الأرضية الحقيقية، فيصبح الحياد التام 50% بالضبط.
+ *
+ * التحويل خطي، فترتيب البنود لا يتغير به إطلاقاً؛ ما يتغير هو قراءة الرقم فقط.
+ */
+export function computeNormalizedScore(
+  mean: number,
+  scaleMin: number = ANALYSIS_SCALE.min,
+  scaleMax: number = ANALYSIS_SCALE.max
+): number {
+  const range = scaleMax - scaleMin;
+  if (!Number.isFinite(mean) || range <= 0) return 0;
+  const raw = ((mean - scaleMin) / range) * 100;
+  return round2(Math.min(100, Math.max(0, raw)));
 }
 
 /** الوزن النسبي بالصيغة الأكاديمية المتعارف عليها */

@@ -9,6 +9,7 @@
 # testing
 /coverage
 /tmp/
+/output/
 /analysis-verification.pdf
 
 # next.js

@@ -3,7 +3,7 @@
 import '@/styles/print.css';
 
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
-import { ReportData } from '@/types/analysis';
+import { QuestionResult, ReportData } from '@/types/analysis';
 import {
   Area,
   AreaChart,
@@ -20,22 +20,30 @@ import {
   ANALYSIS_SCALE,
   DISTRIBUTION_BANDS,
   NARRATIVE_THRESHOLDS,
+  POLARIZATION,
+  RELATIVE_WEIGHT_FLOOR,
+  SHARE_BANDS,
+  SHARE_LEVEL_LABELS,
+  ShareTone,
   gradeFor,
+  shareStyle,
 } from '@/lib/analysis/scale';
 import {
   cleanAutoCommentHtml,
   formatReportDate,
   getAxisExtremes,
-  getBottom5ChartData,
+  getPolarizedResults,
+  getRankedCharts,
   getRespondentCount,
   getResponseHistogramData,
-  getTop10ChartData,
   getWeightDistributionPieData,
 } from '@/lib/pdf/report-helpers';
 import {
   balanceReportPageStarts,
   getReportLayoutProfile,
 } from '@/lib/pdf/report-layout';
+import { auditReport } from '@/lib/analysis/audit';
+import { PRIORITY_STYLES, recommendationScope } from '@/lib/analysis/recommendations';
 
 interface AnalysisPrintDocumentProps {
   data: ReportData;
@@ -48,6 +56,44 @@ function barColor(average: number): string {
 }
 
 const RADIAN = Math.PI / 180;
+
+/** بدائل المقياس مرتبة تصاعدياً، لشرح كل درجة في جدول التحويل */
+const LEVEL_LABELS = ['غير موافق جداً', 'غير موافق', 'محايد', 'موافق', 'موافق جداً'] as const;
+
+/**
+ * خلية نسبة داخل جدول انقسام الآراء.
+ *
+ * درجة اللون تتبع حجم النسبة، وعائلة اللون تتبع اتجاه الرأي: تدرّج واحد لكل
+ * الأعمدة كان يجعل «رفض 45%» و«موافقة 45%» متطابقين بصرياً رغم تناقضهما.
+ * الإطار السميك يميّز أكبر النسب الثلاث في الصف.
+ */
+function ShareCell({
+  tone,
+  value,
+  dominant,
+}: {
+  tone: ShareTone;
+  value: number;
+  dominant: boolean;
+}) {
+  const style = shareStyle(tone, value);
+  return (
+    <td
+      className={`share${dominant ? ' share--dominant' : ''}`}
+      style={{ color: style.color, background: style.background }}
+    >
+      {value}%
+    </td>
+  );
+}
+
+/** أي الاتجاهات الثلاثة صاحب أكبر نسبة في الصف */
+function dominantTone(item: QuestionResult): ShareTone {
+  const max = Math.max(item.negativeShare, item.neutralShare, item.positiveShare);
+  if (item.positiveShare === max) return 'positive';
+  if (item.negativeShare === max) return 'negative';
+  return 'neutral';
+}
 
 interface DonutLabelProps {
   cx: number;
@@ -139,44 +185,41 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
   // العدد الإجمالي أدق من أكبر عدد استجابات لسؤال واحد، لأن الأسئلة تختلف في
   // القيم المفقودة. نعود للتقدير القديم فقط مع تقارير قديمة لا تحمل الحقل.
   const respondentCount = data.totalRespondents ?? getRespondentCount(data.results);
-  const top10Data = getTop10ChartData(data.resultsForAnalysis);
-  const bottom5Data = getBottom5ChartData(data.resultsForAnalysis);
+  const rankedCharts = getRankedCharts(data.resultsForAnalysis);
+  // يُعاد حسابه هنا لا يُمرَّر: التقرير المطبوع قد يُفتح من ملف محفوظ، والملحق
+  // يجب أن يصف الأرقام المعروضة فعلاً على الصفحة لا حالتها وقت التوليد.
+  const audit = auditReport(data);
   const distribution = getWeightDistributionPieData(data.results);
   const { best: bestAxis, worst: worstAxis } = getAxisExtremes(data.axes);
 
   const hasAxes = data.axes.length > 0;
   const hasComments = Boolean(data.comments && data.comments.length > 0);
-  const hasBinary = Boolean(data.binaryResults && data.binaryResults.length > 0);
+  const recommendations = data.recommendations ?? [];
+  const hasRecommendations = recommendations.length > 0;
+  const polarized = getPolarizedResults(data.results);
+  const hasPolarized = polarized.length > 0;
+  const sampleProfile = data.sampleProfile ?? [];
+  const hasSampleProfile = sampleProfile.length > 0;
   const comparison = data.comparison;
   const overallGrade = gradeFor(data.overallAverage);
 
-  const usedScaleRanges = Array.from(
-    new Map(
-      data.results.map((item) => {
-        const minimum = item.scaleMin ?? ANALYSIS_SCALE.min;
-        return [`${minimum}-${item.scaleMax}`, { minimum, maximum: item.scaleMax }];
-      })
-    ).values()
-  ).sort((a, b) => a.maximum - b.maximum || a.minimum - b.minimum);
-  const scaleCounts = usedScaleRanges
-    .map(({ minimum, maximum }) => {
-      const count = data.results.filter(
-        (item) => (item.scaleMin ?? ANALYSIS_SCALE.min) === minimum && item.scaleMax === maximum
-      ).length;
-      return `من ${minimum} إلى ${maximum}: ${count} سؤال`;
-    })
-    .join('، ');
-  const scaleDescription =
-    usedScaleRanges.length === 1
-      ? `سُلَّم ${usedScaleRanges[0].minimum}-${usedScaleRanges[0].maximum}`
-      : `سلالم متعددة حسب السؤال (${usedScaleRanges
-          .map(({ minimum, maximum }) => `${minimum}-${maximum}`)
-          .join('، ')})`;
-  const floorDescription = usedScaleRanges
-    .map(({ minimum, maximum }) =>
-      `${Math.round((minimum / maximum) * 100)}% للسُلَّم ${minimum}-${maximum}`
-    )
-    .join('، ');
+  // السُّلَّم لم يعد متغيراً: كل بند يدخل التحليل هو ليكرت خماسي، والتحقق يمنع
+  // إنتاج التقرير أصلاً إذا خالف بند ذلك. فلا حاجة لوصف سلالم متعددة.
+  const scaleDescription = `${ANALYSIS_SCALE.label} (${ANALYSIS_SCALE.min}-${ANALYSIS_SCALE.max})`;
+
+  /** ترجمة كل درجة على السُّلَّم إلى نسبتيها، لتفسير أرقام الجدول */
+  const conversionRows = LEVEL_LABELS.map((label, index) => {
+    const value = ANALYSIS_SCALE.min + index;
+    return {
+      value,
+      label,
+      weight: Math.round((value / ANALYSIS_SCALE.max) * 1000) / 10,
+      normalized: Math.round(
+        ((value - ANALYSIS_SCALE.min) / (ANALYSIS_SCALE.max - ANALYSIS_SCALE.min)) * 100
+      ),
+    };
+  });
+
   const histogramData = getResponseHistogramData(data.results);
   const warnings = data.analysisWarnings ?? [];
 
@@ -185,18 +228,19 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'وحدة التحليل ونطاقه',
       description: (
         <>
-          وحدة التحليل هي إجابة المشارك عن بند كمي. شمل التقرير {respondentCount} مشاركاً و
-          {data.results.length} بنداً كمياً، وتُعرض أسئلة نعم/لا والتعليقات في أقسام منفصلة.
+          {'وحدة التحليل هي إجابة المشارك عن بند من بنود '}
+          {ANALYSIS_SCALE.label}
+          {`. شمل التقرير ${respondentCount} مشاركاً و${data.results.length} بنداً. المتغيرات ذات الإجابتين أو الثلاث ليست بنود قياس بل متغيرات ديموغرافية، فتُعرض في توصيف العيّنة وتُستخدم في المقارنة بين الفئات ولا تدخل المتوسط العام.`}
         </>
       ),
     },
     {
-      term: 'مصدر سُلَّم السؤال',
+      term: 'سُلَّم القياس',
       description: (
         <>
-          بدائل السؤال المخزنة هي المرجع الأول لليكرت، والحد الصريح هو المرجع للمقياس الخطي.
-          السلالم المستخدمة: <strong>{scaleCounts}</strong>. إذا تجاوزت قيمة مرصودة الحد الموصوف،
-          يرفع المحرك الحد ويصدر تحذيراً بدلاً من إنتاج نسبة تتجاوز 100%.
+          {'السُّلَّم ثابت: '}
+          <strong>{scaleDescription}</strong>
+          {`. ليس خياراً يُضبط ولا قيمة تُستنتج من البيانات، لأن عدد درجات المقياس قرار تصميم الأداة لا خاصية في الإجابات. أي بند مخزَّن بعدد بدائل مختلف، أو أي قيمة خارج ${ANALYSIS_SCALE.min}-${ANALYSIS_SCALE.max}، يوقف إنتاج التقرير برسالة صريحة بدل أن يُصحَّح في صمت.`}
         </>
       ),
     },
@@ -204,8 +248,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'ترميز الاستجابات',
       description: (
         <>
-          تُرمز البدائل ترتيبياً من الحد الأدنى الموصوف للسؤال إلى حده الأعلى. يعتمد
-          التحليل خريطة بدائل كل سؤال، ولا يخلط بين عدد البدائل وقيمة رقمية موروثة من سؤال آخر.
+          {`تُرمز البدائل ترتيبياً حسب ترتيبها المخزَّن في النموذج: البديل الأول يأخذ ${ANALYSIS_SCALE.max} والأخير ${ANALYSIS_SCALE.min}. والدرجة الأعلى تعني دائماً تقييماً أفضل بعد إعادة ترميز البنود العكسية.`}
         </>
       ),
     },
@@ -213,8 +256,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'الأسئلة العكسية',
       description: (
         <>
-          يعاد ترميز السؤال المحدد عكسياً قبل الحساب بالصيغة: (الحد الأدنى + الحد الأعلى - القيمة)،
-          حتى تشير الدرجة الأعلى دائماً إلى تقييم أفضل.
+          {'يعاد ترميز السؤال المحدد عكسياً قبل الحساب بالصيغة: (الحد الأدنى + الحد الأعلى - القيمة)، حتى تشير الدرجة الأعلى دائماً إلى تقييم أفضل.'}
         </>
       ),
     },
@@ -222,17 +264,15 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'المفقود وغير الصالح',
       description: (
         <>
-          تُستبعد الإجابة الفارغة أو غير الرقمية من السؤال فقط، ويظهر العدد الصالح لكل بند. القيم
-          خارج نطاق السُلَّم تُستبعد وتوثق في تحذيرات سلامة البيانات.
+          {'تُستبعد الإجابة الفارغة أو غير الرقمية من السؤال فقط، ويظهر العدد الصالح لكل بند. أما القيمة الرقمية الواقعة خارج المقياس فلا تُستبعد بصمت: هي خلل في البيانات يوقف إنتاج التقرير.'}
         </>
       ),
     },
     {
-      term: 'المتوسط والانحراف',
+      term: 'المتوسط',
       description: (
         <>
-          المتوسط هو مجموع القيم الصالحة ÷ عددها. الانحراف المعياري المعروض هو انحراف العينة
-          بقسمة التباين على (ن - 1)، ويصف تشتت الآراء ولا يرفع التقييم أو يخفضه.
+          {'مجموع القيم الصالحة ÷ عددها. ويُحسب الانحراف المعياري للعينة (بقسمة التباين على ن - 1) ويظهر في ملف Excel المصدَّر؛ وأُخرج من جدول التقرير لأن رقماً مثل 1.83 لا يقول شيئاً للقارئ، وحلّ محلّه قسم انقسام الآراء بنسب مئوية مباشرة.'}
         </>
       ),
     },
@@ -240,10 +280,57 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'الوزن النسبي',
       description: (
         <>
-          نسبة مجموع الاستجابات إلى أقصى مجموع ممكن للسؤال:
+          {'نسبة مجموع الاستجابات إلى أقصى مجموع ممكن للسؤال، وهو المؤشر الذي تُبنى عليه الدرجة والترتيب:'}
           <span className="print-formula">
-            ( مجموع الاستجابات ÷ ( العدد الصالح × الحد الأعلى للسُلَّم ) ) × 100
+            {`( مجموع الاستجابات ÷ ( العدد الصالح × ${ANALYSIS_SCALE.max} ) ) × 100`}
           </span>
+        </>
+      ),
+    },
+    {
+      term: 'المؤشر المعياري',
+      description: (
+        <>
+          {'الوزن النسبي يقسم على الحد الأعلى وحده، فأرضيته '}
+          <strong>{`${RELATIVE_WEIGHT_FLOOR}%`}</strong>
+          {' لا صفر: أسوأ تقييم ممكن يظهر عندها، والحياد التام يظهر 60%. أما المؤشر المعياري فيقيس موضع المتوسط بين طرفي السُّلَّم، فيبدأ من صفر حقيقي ويجعل الحياد التام 50% بالضبط:'}
+          <span className="print-formula">
+            {`( ( المتوسط - ${ANALYSIS_SCALE.min} ) ÷ ( ${ANALYSIS_SCALE.max} - ${ANALYSIS_SCALE.min} ) ) × 100`}
+          </span>
+          {'والتحويل بين المؤشرين خطي، فترتيب البنود لا يتغير به إطلاقاً؛ ما يتغير هو قراءة الرقم وحدها.'}
+        </>
+      ),
+    },
+    {
+      term: 'جدول تحويل الدرجات',
+      description: (
+        <table className="print-table print-table--inline">
+          <thead>
+            <tr>
+              <th>المتوسط</th>
+              <th>لو اختاره الجميع</th>
+              <th>الوزن النسبي</th>
+              <th>المؤشر المعياري</th>
+            </tr>
+          </thead>
+          <tbody>
+            {conversionRows.map((row) => (
+              <tr key={row.value}>
+                <td className="num">{row.value.toFixed(1)}</td>
+                <td>{row.label}</td>
+                <td className="num">{`${row.weight}%`}</td>
+                <td className="num">{row.normalized}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ),
+    },
+    {
+      term: 'انقسام الآراء',
+      description: (
+        <>
+          {`يُعد البند منقسماً إذا بلغ الرافضون والموافقون معاً ${POLARIZATION.endShare}% فأكثر من استجاباته الصالحة. المتوسط لا يميّز هذه الحالة عن بند أجاب عنه الجميع بالحياد رغم اختلاف الواقع تماماً، ولذلك تُعرض نسب الاتجاهات الثلاثة صراحةً. وتُلوَّن الخلية بحسب شدة النسبة: مرتفعة عند ${SHARE_BANDS.high}% فأعلى، ومتوسطة من ${SHARE_BANDS.medium}%، ومنخفضة دون ذلك.`}
         </>
       ),
     },
@@ -251,17 +338,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'المتوسط العام والمحاور',
       description: (
         <>
-          المتوسط العام هو المتوسط الحسابي لأوزان البنود الكمية، فيأخذ كل بند وزناً متساوياً.
-          ومتوسط المحور هو متوسط أوزان البنود التابعة له فقط؛ لا تدخل البنود الثنائية أو النصية.
-        </>
-      ),
-    },
-    {
-      term: 'أرضية الوزن النسبي',
-      description: (
-        <>
-          تعتمد أرضية الوزن على الحد الأدنى للسؤال، وتساوي <strong>{floorDescription}</strong>.
-          لذلك الوزن النسبي مؤشر نسبة من الدرجة القصوى؛ ويبدأ من صفر فقط عندما يبدأ السُلَّم من صفر.
+          {'المتوسط العام هو المتوسط الحسابي لأوزان بنود ليكرت، فيأخذ كل بند وزناً متساوياً. ومتوسط المحور هو متوسط أوزان بنوده فقط. لا تدخل المتغيرات الديموغرافية ولا البنود النصية أياً من المتوسطين.'}
         </>
       ),
     },
@@ -269,9 +346,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'الثبات الداخلي',
       description: (
         <>
-          يحسب ألفا كرونباخ المعياري من متوسط ارتباطات البنود، بعد الحذف القائمي للاستجابات غير
-          المكتملة. هذه الصيغة تجعل السلالم المختلفة قابلة للجمع، ولا تعرض قيمة عند انعدام تباين
-          بند أو عدم كفاية البنود والعينة.
+          {'يحسب ألفا كرونباخ المعياري من متوسط ارتباطات البنود، بعد الحذف القائمي للاستجابات غير المكتملة. ولا تعرض قيمة عند انعدام تباين بند أو عدم كفاية البنود والعينة.'}
         </>
       ),
     },
@@ -279,8 +354,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'الترتيب والتعادل',
       description: (
         <>
-          ترتيب تنافسي تنازلي حسب الوزن النسبي: البنود المتساوية تأخذ الرتبة نفسها، ثم يقفز الرقم
-          التالي بعدد البنود المتعادلة. تُقرب النتائج المعروضة إلى منزلتين فقط بعد إتمام الحساب.
+          {'ترتيب تنافسي تنازلي حسب الوزن النسبي: البنود المتساوية تأخذ الرتبة نفسها، ثم يقفز الرقم التالي بعدد البنود المتعادلة. تُقرب النتائج المعروضة إلى منزلتين فقط بعد إتمام الحساب.'}
         </>
       ),
     },
@@ -288,8 +362,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'عتبات التفسير',
       description: (
         <>
-          ممتاز (90% فأعلى)، جيد جداً (80-أقل من 90%)، جيد (70-أقل من 80%)، مقبول
-          (60-أقل من 70%)، ضعيف (أقل من 60%). هذه عتبات وصفية للنظام وليست اختبار دلالة إحصائية.
+          {'ممتاز (90% فأعلى)، جيد جداً (80-أقل من 90%)، جيد (70-أقل من 80%)، مقبول (60-أقل من 70%)، ضعيف (أقل من 60%). وهي عتبات على الوزن النسبي، ووصفية للنظام وليست اختبار دلالة إحصائية.'}
         </>
       ),
     },
@@ -297,10 +370,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'القوة والتحسين',
       description: (
         <>
-          نقطة قوة عند {NARRATIVE_THRESHOLDS.strength}% فأعلى، ونقطة تحسين عند أقل من{' '}
-          {NARRATIVE_THRESHOLDS.weakness}%. وتصنف الأسئلة مرتفعة عند {DISTRIBUTION_BANDS.high}%
-          فأعلى، ومتوسطة من {DISTRIBUTION_BANDS.medium}% إلى أقل من {DISTRIBUTION_BANDS.high}%،
-          ومنخفضة دون ذلك.
+          {`نقطة قوة عند ${NARRATIVE_THRESHOLDS.strength}% فأعلى، ونقطة تحسين عند أقل من ${NARRATIVE_THRESHOLDS.weakness}%. وتصنف الأسئلة مرتفعة عند ${DISTRIBUTION_BANDS.high}% فأعلى، ومتوسطة من ${DISTRIBUTION_BANDS.medium}% إلى أقل من ${DISTRIBUTION_BANDS.high}%، ومنخفضة دون ذلك.`}
         </>
       ),
     },
@@ -308,9 +378,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'المقارنات والتعليقات',
       description: (
         <>
-          المقارنة بين الفئات وصفية وتعتمد متوسطات المحاور ولا تدعي فروقاً دالة إحصائياً. تنظف
-          التعليقات من الإجابات الخالية، وتجمع النصوص المتطابقة مع إظهار مرات التكرار دون تحويلها
-          إلى درجات كمية.
+          {'المقارنة بين الفئات وصفية وتعتمد متوسطات المحاور ولا تدعي فروقاً دالة إحصائياً. وتنظف التعليقات من الإجابات الخالية، وتجمع النصوص المتطابقة مع إظهار مرات التكرار دون تحويلها إلى درجات كمية.'}
         </>
       ),
     },
@@ -318,8 +386,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
       term: 'ضبط الجودة وحدود القراءة',
       description: (
         <>
-          يمنع التصدير إذا خرج متوسط عن سُلَّمه أو وزن عن 0-100%. النتائج تصف العينة المستجيبة
-          فقط؛ ولا تثبت السببية أو تمثيل غير المستجيبين، وتفسر مع حجم العينة ومعدل الاستجابة.
+          {'يمنع التصدير إذا خرج متوسط عن سُلَّمه، أو خالف المؤشران المعادلة الرابطة بينهما، أو لم يبلغ مجموع نسب الاتجاهات 100%. والنتائج تصف العينة المستجيبة فقط؛ لا تثبت السببية ولا تمثيل غير المستجيبين، وتفسر مع حجم العينة ومعدل الاستجابة.'}
         </>
       ),
     },
@@ -328,10 +395,13 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
   // الفهرس يتبع الأقسام الفعلية — قسم غائب لا يظهر في الفهرس
   const tocEntries: { title: string; note: string }[] = [
     { title: 'الملخص التنفيذي', note: 'أهم المؤشرات في لمحة واحدة' },
-    { title: 'منهجية التحليل', note: 'المقياس والمعادلة وعتبات الحكم' },
+    { title: 'منهجية التحليل', note: 'المقياس والمعادلتان وعتبات الحكم' },
     { title: 'نتائج تحليل الاستبيان', note: 'جدول تفصيلي بكل الأسئلة ودرجاتها' },
-    ...(hasBinary
-      ? [{ title: 'أسئلة الإجابة الثنائية', note: 'أسئلة نعم/لا خارج المتوسط العام' }]
+    ...(hasPolarized
+      ? [{ title: 'أسئلة انقسام الآراء', note: 'بنود تباعدت فيها كتلتا الرفض والموافقة' }]
+      : []),
+    ...(hasSampleProfile
+      ? [{ title: 'توصيف العيّنة', note: 'المتغيرات الديموغرافية وتوزيع المشاركين' }]
       : []),
     ...(hasAxes
       ? [
@@ -343,10 +413,14 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
     ...(comparison
       ? [{ title: 'مقارنة بين الفئات', note: `حسب ${comparison.column.replace(/^\d+\.\s*/, '')}` }]
       : []),
-    { title: 'التحليل النهائي والاستنتاجات', note: 'نقاط القوة والتحسين والتوصيات' },
+    { title: 'التحليل النهائي والاستنتاجات', note: 'نقاط القوة ومواضع التحسين' },
+    ...(hasRecommendations
+      ? [{ title: 'التوصيات وخطة التحسين', note: 'إجراء ومسؤول ومدة ومؤشر لكل مجال' }]
+      : []),
     ...(hasComments
       ? [{ title: 'تعليقات وملاحظات المشاركين', note: 'الإجابات النصية مجمَّعة' }]
       : []),
+    { title: 'ملحق التدقيق الآلي', note: 'الثوابت المفحوصة وحدود قراءة النتائج' },
   ];
 
   return (
@@ -447,6 +521,12 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
             <div className="print-kpi-card__note">عدد الأسئلة المحللة: {data.results.length}</div>
           </div>
 
+          <div className="print-kpi-card">
+            <div className="print-kpi-card__label">المؤشر المعياري العام</div>
+            <div className="print-kpi-card__value">{data.overallNormalized}</div>
+            <div className="print-kpi-card__note">من 100 — أرضيته صفر والحياد التام 50</div>
+          </div>
+
           {bestAxis && (
             <div className="print-kpi-card">
               <div className="print-kpi-card__label">أعلى محور أداءً</div>
@@ -500,7 +580,9 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
         <div className="print-method-summary">
           <strong>{scaleDescription}</strong>
           <span> · </span>
-          <span>الأوزان مقيدة بالنطاق 0-100%</span>
+          <span>{`الوزن النسبي من ${RELATIVE_WEIGHT_FLOOR}% إلى 100%`}</span>
+          <span> · </span>
+          <span>المؤشر المعياري من 0 إلى 100</span>
           <span> · </span>
           <span>التقريب بعد الحساب إلى منزلتين</span>
         </div>
@@ -526,10 +608,10 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           <thead>
             <tr>
               <th style={{ width: '5%' }}>م</th>
-              <th style={{ width: '36%' }}>السؤال</th>
+              <th style={{ width: '34%' }}>السؤال</th>
               <th>العدد</th>
               <th>المتوسط</th>
-              <th>الانحراف</th>
+              <th>المؤشر المعياري</th>
               <th>الوزن النسبي</th>
               <th>الدرجة</th>
               <th>الترتيب</th>
@@ -544,7 +626,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
                   <td>{item.question}</td>
                   <td className="num">{item.count}</td>
                   <td className="num">{item.mean}</td>
-                  <td className="num">{item.stdDev}</td>
+                  <td className="num">{item.normalizedScore}</td>
                   <td className="weight">{item.relativeWeight}%</td>
                   <td className="grade" style={{ color: grade.color, background: grade.background }}>
                     {grade.label}
@@ -557,38 +639,118 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
         </table>
       </section>
 
-      {/* ===== أسئلة نعم/لا ===== */}
-      {hasBinary && (
+      {/* ===== انقسام الآراء ===== */}
+      {hasPolarized && (
         <section className="print-section print-section--flow" data-layout-section="true">
-          <h2 className="print-section-title">أسئلة الإجابة الثنائية (نعم / لا)</h2>
+          <h2 className="print-section-title">أسئلة انقسام الآراء</h2>
           <p style={{ fontSize: '10pt', marginBottom: '4mm' }} data-layout-lead="true">
-            هذه الأسئلة معروضة منفصلةً ولا تدخل في حساب المتوسط العام، لأن مداها لا يطابق مدى
-            {' '}{ANALYSIS_SCALE.label} فيشوّه المقارنة.
+            {`بنود بلغت فيها كتلتا الرفض والموافقة معاً ${POLARIZATION.endShare}% فأكثر من الاستجابات الصالحة. المتوسط وحده لا يميّز هذه البنود عن بند أجاب عنه الجميع بالحياد رغم اختلاف الواقع تماماً، ولذلك تُعرض هنا نسب الاتجاهات الثلاثة. والخلية المؤطَّرة هي أكبر النسب في الصف، ودرجة اللون تتبع شدة النسبة.`}
           </p>
-          <table className="print-table">
+          <table className="print-table print-table--shares">
             <thead>
               <tr>
-                <th style={{ width: '6%' }}>م</th>
-                <th style={{ width: '48%' }}>السؤال</th>
+                <th style={{ width: '5%' }}>م</th>
+                <th style={{ width: '40%' }}>السؤال</th>
                 <th>العدد</th>
-                <th>نسبة «نعم»</th>
-                <th>نسبة «لا»</th>
+                <th>غير موافق</th>
+                <th>محايد</th>
+                <th>موافق</th>
+                <th>الوزن النسبي</th>
               </tr>
             </thead>
             <tbody>
-              {data.binaryResults!.map((item) => {
-                const yes = item.distribution.find((slice) => slice.value === item.scaleMax);
-                const no = item.distribution.find((slice) => slice.value === (item.scaleMin ?? 1));
+              {polarized.map((item) => {
+                const dominant = dominantTone(item);
                 return (
                   <tr key={item.questionNumber}>
                     <td className="num">{item.questionNumber}</td>
                     <td>{item.question}</td>
                     <td className="num">{item.count}</td>
-                    <td className="weight">{yes?.percentage ?? 0}%</td>
-                    <td className="num">{no?.percentage ?? 0}%</td>
+                    <ShareCell
+                      tone="negative"
+                      value={item.negativeShare}
+                      dominant={dominant === 'negative'}
+                    />
+                    <ShareCell
+                      tone="neutral"
+                      value={item.neutralShare}
+                      dominant={dominant === 'neutral'}
+                    />
+                    <ShareCell
+                      tone="positive"
+                      value={item.positiveShare}
+                      dominant={dominant === 'positive'}
+                    />
+                    <td className="weight">{item.relativeWeight}%</td>
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+
+          <div className="print-legend print-legend--shares">
+            {(['high', 'medium', 'low'] as const).map((level) => (
+              <div key={level} className="print-legend__item">
+                <span
+                  className="print-legend__swatch"
+                  style={{
+                    background: shareStyle(
+                      'negative',
+                      level === 'high' ? SHARE_BANDS.high : level === 'medium' ? SHARE_BANDS.medium : 0
+                    ).background,
+                  }}
+                />
+                <span>{SHARE_LEVEL_LABELS[level]}</span>
+              </div>
+            ))}
+            <div className="print-legend__item">
+              <span className="print-legend__swatch print-legend__swatch--dominant" />
+              <span>الأكبر بين الاتجاهات الثلاثة في الصف</span>
+            </div>
+          </div>
+
+          <p className="print-chart-note">
+            التدرّج يقارن داخل العمود الواحد، والإطار يقارن داخل الصف. ولكل عمود عائلته اللونية:
+            الأحمر للرفض، والكهرماني للحياد، والأخضر للموافقة.
+          </p>
+        </section>
+      )}
+
+      {/* ===== توصيف العيّنة ===== */}
+      {hasSampleProfile && (
+        <section className="print-section print-section--flow" data-layout-section="true">
+          <h2 className="print-section-title">توصيف العيّنة</h2>
+          <p style={{ fontSize: '10pt', marginBottom: '4mm' }} data-layout-lead="true">
+            المتغيرات الديموغرافية وأسئلة الإجابتين. هذه متغيرات تصف من أجاب، لا بنود قياس، فلا
+            تدخل المتوسط العام ولا ترتيب الأسئلة؛ وتُستخدم أساساً للمقارنة بين الفئات.
+          </p>
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th style={{ width: '38%' }}>المتغير</th>
+                <th style={{ width: '32%' }}>الفئة</th>
+                <th>العدد</th>
+                <th>النسبة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sampleProfile.flatMap((group) =>
+                group.values.map((value, index) => (
+                  <tr key={`${group.column}-${value.label}`}>
+                    {index === 0 && (
+                      <td rowSpan={group.values.length} style={{ fontWeight: 700 }}>
+                        {group.column.replace(/^\d+\.\s*/, '')}
+                        <div style={{ fontWeight: 400, fontSize: '8.5pt', color: '#666666' }}>
+                          {`${group.answered} مشاركاً`}
+                        </div>
+                      </td>
+                    )}
+                    <td>{value.label}</td>
+                    <td className="num">{value.count}</td>
+                    <td className="weight">{value.percentage}%</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>
@@ -604,7 +766,8 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
                 <th>المحور</th>
                 <th>نطاق الأسئلة</th>
                 <th>عدد الأسئلة</th>
-                <th>المتوسط (%)</th>
+                <th>الوزن النسبي (%)</th>
+                <th>المؤشر المعياري</th>
                 <th>ألفا المعياري</th>
                 <th>الدرجة</th>
                 <th>الترتيب</th>
@@ -621,6 +784,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
                     </td>
                     <td className="num">{axis.count}</td>
                     <td className="weight">{axis.average}%</td>
+                    <td className="num">{axis.normalizedAverage ?? '—'}</td>
                     <td className="num">
                       {axis.cronbachAlpha !== undefined ? axis.cronbachAlpha : '—'}
                     </td>
@@ -660,7 +824,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
                       {axis.rank}. {axis.name}
                     </span>
                     <span className="print-axis-bar__value" style={{ color: barColor(average) }}>
-                      {average}%
+                      {`${average}% · معياري ${axis.normalizedAverage ?? 0}`}
                     </span>
                   </div>
                   <div className="print-axis-bar__track">
@@ -684,26 +848,38 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
 
         <div className="print-chart-grid">
         <div className="print-chart-block" data-layout-lead="true">
-          <h3>أعلى 10 أسئلة حسب الوزن النسبي</h3>
+          <h3>{rankedCharts.top.title}</h3>
+          <p className="print-chart-note">
+            {'بالمؤشر المعياري (0-100): صفر يعني أن الجميع اختار أدنى بديل، و100 أن الجميع اختار أعلاه. والقيمة نفسها في عمود «المؤشر المعياري» بجدول النتائج.'}
+          </p>
           <div className="print-chart-wrap">
-            <BarChart width={layoutProfile.chartWidth} height={layoutProfile.chartHeight} data={top10Data}>
+            <BarChart
+              width={layoutProfile.chartWidth}
+              height={layoutProfile.chartHeight}
+              data={rankedCharts.top.points}
+            >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" interval={0} tick={{ fontSize: 10 }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-              <Bar dataKey="weight" fill="#2e7d32" isAnimationActive={false} />
+              <Bar dataKey="score" fill="#2e7d32" isAnimationActive={false} />
             </BarChart>
           </div>
         </div>
 
-        {bottom5Data.length > 0 && (
+        {rankedCharts.bottom && (
           <div className="print-chart-block">
-            <h3>أدنى 5 أسئلة حسب الوزن النسبي</h3>
+            <h3>{rankedCharts.bottom.title}</h3>
+            <p className="print-chart-note">بالمؤشر المعياري (0-100)، مرتبة من الأدنى.</p>
             <div className="print-chart-wrap">
-              <BarChart width={layoutProfile.chartWidth} height={layoutProfile.chartHeight} data={bottom5Data}>
+              <BarChart
+                width={layoutProfile.chartWidth}
+                height={layoutProfile.chartHeight}
+                data={rankedCharts.bottom.points}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" interval={0} tick={{ fontSize: 10 }} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-                <Bar dataKey="weight" fill="#c62828" isAnimationActive={false} />
+                <Bar dataKey="score" fill="#c62828" isAnimationActive={false} />
               </BarChart>
             </div>
           </div>
@@ -713,7 +889,7 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           <div className="print-chart-block">
             <h3>المدرج التكراري للاستجابات</h3>
             <p className="print-chart-note">
-              موضع الاستجابة داخل سُلَّم سؤالها بعد توحيده إلى خمس فئات قابلة للمقارنة.
+              عدد الاستجابات على كل بديل من بدائل المقياس الخماسي، عبر كل الأسئلة مجتمعة.
             </p>
             <div className="print-chart-wrap">
               <AreaChart
@@ -901,6 +1077,73 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
         </div>
       </section>
 
+      {/* ===== التوصيات =====
+          بطاقات لا جدول: سبعة حقول في صف واحد على عرض A4 عربي تسحق النص حتى
+          يصير عمود كلمة واحدة. البطاقة تعطي الإجراء سطره كاملاً وتضع الحقول
+          الأربعة القصيرة في شبكة أسفلها. */}
+      {hasRecommendations && (
+        <section className="print-section print-section--flow" data-layout-section="true">
+          <h2 className="print-section-title">التوصيات وخطة التحسين</h2>
+          <p style={{ fontSize: '10pt', marginBottom: '4mm' }} data-layout-lead="true">
+            {'توصية واحدة لكل مجال، مرتبة بالأولوية. كل رقم في المبرر مأخوذ من نتائج هذا التقرير ويتحقق منه التدقيق الآلي، ولكل توصية جهة تنفيذ ومدة ومؤشر قياس وهدف رقمي للدورة القادمة.'}
+          </p>
+
+          {recommendations.map((recommendation, index) => {
+            const badge = PRIORITY_STYLES[recommendation.priority];
+            return (
+              <article
+                key={recommendation.id}
+                className="print-reco"
+                data-layout-lead={index === 0 ? 'true' : undefined}
+              >
+                <header className="print-reco__head">
+                  <span
+                    className="print-reco__badge"
+                    style={{ color: badge.color, background: badge.background }}
+                  >
+                    {recommendation.priority}
+                  </span>
+                  <span className="print-reco__scope">{recommendationScope(recommendation)}</span>
+                </header>
+
+                <p className="print-reco__action">{recommendation.action}</p>
+                <p className="print-reco__why">
+                  <strong>المبرر: </strong>
+                  {recommendation.rationale}
+                </p>
+
+                <dl className="print-reco__meta">
+                  <div>
+                    <dt>الجهة المسؤولة</dt>
+                    <dd>{recommendation.owner}</dd>
+                  </div>
+                  <div>
+                    <dt>الإطار الزمني</dt>
+                    <dd>{recommendation.timeframe}</dd>
+                  </div>
+                  <div>
+                    <dt>مؤشر القياس</dt>
+                    <dd>{recommendation.indicator}</dd>
+                  </div>
+                  <div>
+                    <dt>الهدف</dt>
+                    <dd>{recommendation.target}</dd>
+                  </div>
+                </dl>
+
+                {recommendation.quotes.length > 0 && (
+                  <ul className="print-reco__quotes">
+                    {recommendation.quotes.map((quote) => (
+                      <li key={quote}>{quote}</li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      )}
+
       {/* ===== تعليقات المشاركين ===== */}
       {hasComments && (
         <section className="print-section print-section--flow" data-layout-section="true">
@@ -930,6 +1173,58 @@ export default function AnalysisPrintDocument({ data, preview = false }: Analysi
           ))}
         </section>
       )}
+      {/* ===== ملحق التدقيق ===== */}
+      <section className="print-section print-section--flow" data-layout-section="true">
+        <h2 className="print-section-title">ملحق التدقيق الآلي</h2>
+
+        <div className="print-audit-summary" data-layout-lead="true">
+          <div>
+            <strong>{audit.checks}</strong>
+            <span>فحص آلي على سلامة الأرقام</span>
+          </div>
+          <div>
+            <strong>{audit.checks - audit.issues.length}</strong>
+            <span>اجتازها التقرير</span>
+          </div>
+          <div>
+            <strong>{audit.warnings.length}</strong>
+            <span>ملاحظة على قوة الدلالة</span>
+          </div>
+        </div>
+
+        <p style={{ fontSize: '9.5pt', margin: '0 0 3mm' }}>
+          {'الفحص يقع على ثوابت لا على نتائج: قواعد يجب أن تصح مهما كانت الإجابات — مثل أن يساوي مجموع نسب التوزيع 100%، وأن يطابق المؤشر المعياري متوسطه ووزنه النسبي معاً، وأن يساوي متوسط المحور متوسط أوزان بنوده، وألا يظهر سؤال واحد في رسمَي الأعلى والأدنى. انكسار أي ثابت يعني خطأ في الحساب لا نتيجة غير متوقعة، ولذلك يمنع إنتاج التقرير من أصله.'}
+        </p>
+
+        {audit.warnings.length > 0 ? (
+          <>
+            <h3 style={{ fontSize: '11pt', color: '#8a5300', margin: '0 0 2mm' }}>
+              ملاحظات على قوة الدلالة (لا تمس صحة الأرقام)
+            </h3>
+            <table className="print-table print-table--compact">
+              <thead>
+                <tr>
+                  <th style={{ width: '26%' }}>الموضع</th>
+                  <th>الملاحظة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.warnings.map((issue, index) => (
+                  <tr key={`${issue.code}-${index}`}>
+                    <td>{issue.scope ?? 'التقرير'}</td>
+                    <td>{issue.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <p className="print-audit-clear">
+            {'اجتاز التقرير كل الفحوص، ولم تُرصد ملاحظة على حجم العيّنة أو معدلات الاستجابة أو ثبات المحاور.'}
+          </p>
+        )}
+
+      </section>
     </div>
   );
 }

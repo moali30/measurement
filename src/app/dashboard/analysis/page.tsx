@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import AnalysisForm, { AnalysisEngineOptions } from '@/components/analysis/AnalysisForm';
 import AnalysisReport from '@/components/analysis/AnalysisReport';
 import { processData } from '@/lib/analysis-utils';
+import { auditReport, formatAuditIssue } from '@/lib/analysis/audit';
 import { ReportData } from '@/types/analysis';
 import { Braces, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Printer, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from 'sonner';
@@ -68,11 +69,25 @@ export default function AnalysisPage() {
       const processed = processData(rawData, formData.axes || [], questionTypes, commentQuestions, {
         reversedQuestions: engineOptions?.reversedQuestions,
         comparisonColumn: engineOptions?.comparisonColumn,
-        scaleMaxOverride: engineOptions?.scaleMaxOverride,
-        questionScaleMax: engineOptions?.questionScaleMax,
-        questionScaleMin: engineOptions?.questionScaleMin,
+        questionOptionCounts: engineOptions?.questionOptionCounts,
         questionValueMaps: engineOptions?.questionValueMaps,
       });
+
+      // خلل في السُّلَّم يوقف التقرير ولا يُصحَّح تلقائياً: نتيجة محسوبة على
+      // سُلَّم خاطئ تبدو سليمة تماماً في الصفحة، ولا شيء فيها يكشف الخطأ.
+      if (processed.analysisErrors.length > 0) {
+        processed.analysisErrors.slice(0, 4).forEach((error) => {
+          toast.error(error.message, { duration: 14000 });
+        });
+        if (processed.analysisErrors.length > 4) {
+          toast.error(
+            `و${processed.analysisErrors.length - 4} خطأ آخر بالصيغة نفسها — صحّح النموذج أو الملف ثم أعد المحاولة.`,
+            { duration: 14000 }
+          );
+        }
+        setIsGenerating(false);
+        return;
+      }
 
       // محور لا يطابق أي سؤال يعني أن نطاق الأرقام خاطئ. بدون هذا التحذير كان
       // المحور يخرج في التقرير بمتوسط 0% ويبدو كأنه نتيجة حقيقية.
@@ -86,22 +101,43 @@ export default function AnalysisPage() {
         );
       }
 
-      const repairedScales = (processed.analysisWarnings ?? []).filter(
-        (warning) => warning.code === 'scale-promoted' || warning.code === 'invalid-values-excluded'
+      const excluded = processed.analysisWarnings.filter(
+        (warning) => warning.code === 'question-excluded'
       );
-      if (repairedScales.length > 0) {
+      if (excluded.length > 0) {
+        toast.info(
+          `استُبعد ${excluded.length} سؤالاً من التحليل الكمي لأنه ليس مقياس ليكرت خماسياً — التفاصيل داخل صفحة المنهجية.`,
+          { duration: 9000 }
+        );
+      }
+
+      const report = { ...formData, ...processed } as ReportData;
+
+      // التدقيق يفحص ثوابت لا نتائج: مجموع نسب لا يساوي 100، أو مؤشراً لا
+      // يطابق متوسطه، يعني خللاً في الحساب لا في الاستبيان. نعرضه هنا بدل أن
+      // ينتظر المستخدم حتى يضغط «تصدير PDF» ليكتشف أن التقرير مرفوض.
+      const audit = auditReport(report);
+      if (audit.errors.length > 0) {
+        audit.errors.slice(0, 3).forEach((issue) => {
+          toast.error(`فشل التدقيق — ${formatAuditIssue(issue)}`, { duration: 14000 });
+        });
+        toast.error(
+          `تعذّر إنتاج التقرير: ${audit.errors.length} من ${audit.checks} فحصاً لم تنجح.`,
+          { duration: 14000 }
+        );
+        setIsGenerating(false);
+        return;
+      }
+      if (audit.warnings.length > 0) {
         toast.warning(
-          `راجع سلامة السلالم: أجرى المحرك ${repairedScales.length} تصحيحاً موثقاً داخل التقرير لمنع نتائج غير منطقية.`,
-          { duration: 10000 }
+          `${audit.warnings.length} ملاحظة على قوة الدلالة — تُطبع في ملحق التدقيق داخل التقرير.`,
+          { duration: 9000 }
         );
       }
 
       setPreviewPdfBlob(null);
       setPreviewPdfUrl(null);
-      setReportData({
-        ...formData,
-        ...processed
-      } as ReportData);
+      setReportData(report);
       setIsGenerating(false);
     }, 500);
   };

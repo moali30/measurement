@@ -3,6 +3,8 @@
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import { gradeFor } from '@/lib/analysis/scale';
+import { getPolarizedResults } from '@/lib/pdf/report-helpers';
+import { recommendationScope } from '@/lib/analysis/recommendations';
 import type { ReportData } from '@/types/analysis';
 
 function safeBaseName(title: string): string {
@@ -20,6 +22,10 @@ function addSheet(workbook: XLSX.WorkBook, name: string, rows: Record<string, un
 /** ملف جداول التحليل، لا ملف الردود الخام. */
 export function exportAnalysisWorkbook(data: ReportData): void {
   const workbook = XLSX.utils.book_new();
+  // نفس معيار التقرير المطبوع، حتى لا يختلف تعريف «الانقسام» بين المخرجين
+  const polarizedNumbers = new Set(
+    getPolarizedResults(data.results).map((item) => item.questionNumber)
+  );
 
   addSheet(workbook, 'الملخص', [
     {
@@ -28,7 +34,9 @@ export function exportAnalysisWorkbook(data: ReportData): void {
       'تاريخ التقرير': data.reportDate,
       'عدد المشاركين': data.totalRespondents ?? 0,
       'عدد الأسئلة': data.results.length,
-      'المتوسط العام': data.overallAverage,
+      'المتوسط العام (وزن نسبي)': data.overallAverage,
+      'المؤشر المعياري العام': data.overallNormalized,
+      'أسئلة انقسام الآراء': polarizedNumbers.size,
       'ألفا كرونباخ': data.overallCronbachAlpha ?? '',
       'عينة الثبات': data.cronbachRespondents ?? '',
     },
@@ -47,8 +55,13 @@ export function exportAnalysisWorkbook(data: ReportData): void {
       'الانحراف المعياري': item.stdDev,
       الوسيط: item.median,
       المنوال: item.mode,
-      'سُلَّم السؤال': item.scaleMax,
+      'سُلَّم السؤال': `${item.scaleMin}-${item.scaleMax}`,
       'الوزن النسبي': item.relativeWeight,
+      'المؤشر المعياري': item.normalizedScore,
+      'نسبة غير الموافقين': item.negativeShare,
+      'نسبة المحايدين': item.neutralShare,
+      'نسبة الموافقين': item.positiveShare,
+      'انقسام في الآراء': polarizedNumbers.has(item.questionNumber) ? 'نعم' : 'لا',
       'درجة التقييم': gradeFor(item.relativeWeight).label,
       الترتيب: item.rank ?? '',
       'سؤال عكسي': item.isReversed ? 'نعم' : 'لا',
@@ -63,7 +76,8 @@ export function exportAnalysisWorkbook(data: ReportData): void {
         المحور: axis.name,
         'أرقام الأسئلة': axis.questionNumbers?.join('، ') || `${axis.start}–${axis.end}`,
         'عدد الأسئلة': axis.count ?? 0,
-        المتوسط: axis.average ?? 0,
+        'الوزن النسبي': axis.average ?? 0,
+        'المؤشر المعياري': axis.normalizedAverage ?? 0,
         'ألفا كرونباخ': axis.cronbachAlpha ?? '',
         'عينة الثبات': axis.reliabilityRespondents ?? '',
         الترتيب: axis.rank ?? '',
@@ -85,17 +99,19 @@ export function exportAnalysisWorkbook(data: ReportData): void {
     )
   );
 
-  if (data.binaryResults?.length) {
+  if (data.sampleProfile?.length) {
     addSheet(
       workbook,
-      'الأسئلة الثنائية',
-      data.binaryResults.map((item) => ({
-        'رقم السؤال': item.questionNumber,
-        السؤال: item.question,
-        العدد: item.count,
-        'نسبة نعم': item.distribution.find((slice) => slice.value === item.scaleMax)?.percentage ?? 0,
-        'نسبة لا': item.distribution.find((slice) => slice.value === 1)?.percentage ?? 0,
-      }))
+      'توصيف العينة',
+      data.sampleProfile.flatMap((group) =>
+        group.values.map((value) => ({
+          المتغير: group.column,
+          الفئة: value.label,
+          العدد: value.count,
+          'النسبة %': value.percentage,
+          'إجمالي من أجاب': group.answered,
+        }))
+      )
     );
   }
 
@@ -110,6 +126,27 @@ export function exportAnalysisWorkbook(data: ReportData): void {
           data.comparison!.axisNames.map((name, index) => [name, row.axisAverages[index]])
         ),
         'المتوسط العام': row.overallAverage,
+      }))
+    );
+  }
+
+  if (data.recommendations?.length) {
+    addSheet(
+      workbook,
+      'التوصيات',
+      data.recommendations.map((recommendation, index) => ({
+        '#': index + 1,
+        الأولوية: recommendation.priority,
+        المجال: recommendationScope(recommendation),
+        التوصية: recommendation.action,
+        المبرر: recommendation.rationale,
+        'الجهة المسؤولة': recommendation.owner,
+        'الإطار الزمني': recommendation.timeframe,
+        'مؤشر القياس': recommendation.indicator,
+        الهدف: recommendation.target,
+        'أرقام الأسئلة': recommendation.questionNumbers.join('، '),
+        'شواهد من التعليقات': recommendation.quotes.join(' | '),
+        'درجة الأولوية': recommendation.severity,
       }))
     );
   }

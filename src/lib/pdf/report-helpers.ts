@@ -1,5 +1,10 @@
 import { Axis, QuestionResult, ReportData } from '@/types/analysis';
-import { DISTRIBUTION_BANDS } from '@/lib/analysis/scale';
+import { auditReport, formatAuditIssue } from '@/lib/analysis/audit';
+import { getRankedCharts } from '@/lib/analysis/charts';
+import { ANALYSIS_SCALE, DISTRIBUTION_BANDS, POLARIZATION } from '@/lib/analysis/scale';
+
+export { getRankedCharts };
+export type { RankedChart, RankedChartPoint, RankedCharts } from '@/lib/analysis/charts';
 
 export function cleanAutoCommentHtml(html: string): string {
   return html
@@ -16,11 +21,22 @@ export function getRespondentCount(results: QuestionResult[]): number {
   return Math.max(...results.map((item) => item.count));
 }
 
-export function getTop10ChartData(resultsForAnalysis: QuestionResult[]) {
-  return resultsForAnalysis.slice(0, 10).map((item) => ({
-    name: `س ${item.questionNumber}`,
-    weight: item.relativeWeight,
-  }));
+/**
+ * الأسئلة التي انقسم الرأي حولها: طرفا التوزيع معاً فوق العتبة.
+ * منسوخة عن محرك التحليل حتى تعمل صفحة الطباعة على تقرير محفوظ بلا إعادة حساب.
+ */
+export function getPolarizedResults(results: QuestionResult[]): QuestionResult[] {
+  return results
+    .filter(
+      (item) =>
+        item.count > 0 &&
+        (item.negativeShare ?? 0) >= POLARIZATION.endShare &&
+        (item.positiveShare ?? 0) >= POLARIZATION.endShare
+    )
+    .sort(
+      (a, b) =>
+        Math.min(b.negativeShare, b.positiveShare) - Math.min(a.negativeShare, a.positiveShare)
+    );
 }
 
 export interface DistributionBucket {
@@ -74,19 +90,13 @@ export function getWeightDistributionPieData(results: QuestionResult[]): Distrib
  * يظهره متوسط كل سؤال على حدة.
  */
 export function getResponseHistogramData(results: QuestionResult[]) {
-  const levels = ['أدنى', 'منخفض', 'متوسط', 'مرتفع', 'أعلى'] as const;
+  const levels = ['غير موافق جداً', 'غير موافق', 'محايد', 'موافق', 'موافق جداً'] as const;
   const totals = new Map<number, number>(levels.map((_, index) => [index, 0]));
 
   results.forEach((item) => {
     item.distribution.forEach((slice) => {
-      // توحيد موضع الاستجابة داخل سُلَّمها يسمح بدمج السلالم الثلاثية
-      // والخماسية من دون أن تعني القيمة 3 «الحد الأعلى» و«الحياد» معاً.
-      const scaleMin = item.scaleMin ?? 1;
-      const normalizedPosition =
-        item.scaleMax > scaleMin
-          ? (slice.value - scaleMin) / (item.scaleMax - scaleMin)
-          : 0;
-      const bucket = Math.min(4, Math.max(0, Math.round(normalizedPosition * 4)));
+      const scaleMin = item.scaleMin ?? ANALYSIS_SCALE.min;
+      const bucket = Math.min(levels.length - 1, Math.max(0, Math.round(slice.value - scaleMin)));
       totals.set(bucket, (totals.get(bucket) ?? 0) + slice.count);
     });
   });
@@ -99,17 +109,6 @@ export function getResponseHistogramData(results: QuestionResult[]) {
       name: levels[level],
       count,
       percentage: grandTotal > 0 ? Math.round((count / grandTotal) * 100) : 0,
-    }));
-}
-
-/** أدنى الأسئلة تقييماً — تصاعدياً حتى يقرأ الرسم من الأسوأ */
-export function getBottom5ChartData(resultsForAnalysis: QuestionResult[]) {
-  return resultsForAnalysis
-    .slice(-5)
-    .reverse()
-    .map((item) => ({
-      name: `س ${item.questionNumber}`,
-      weight: item.relativeWeight,
     }));
 }
 
@@ -143,46 +142,15 @@ export function getAxesChartData(axes: Axis[]) {
   }));
 }
 
+/**
+ * التحقق قبل الطباعة واجهة رفيعة فوق المدقق.
+ *
+ * كانت هنا نسخة ثانية من قواعد السلامة، فأي قاعدة تُضاف في مكان تغيب عن الآخر
+ * ويصبح «سليم» في الواجهة غير «سليم» على الخادم. المصدر الوحيد الآن `audit.ts`.
+ */
 export function getReportValidationErrors(data: unknown): string[] {
   if (!data || typeof data !== 'object') return ['جسم التقرير غير صالح.'];
-  const candidate = data as ReportData;
-  const errors: string[] = [];
-
-  if (typeof candidate.title !== 'string' || !candidate.title.trim()) {
-    errors.push('عنوان التقرير مفقود.');
-  }
-  if (!Array.isArray(candidate.results) || candidate.results.length === 0) {
-    errors.push('لا توجد نتائج أسئلة قابلة للطباعة.');
-    return errors;
-  }
-
-  candidate.results.forEach((item, index) => {
-    const label = `السؤال ${item.questionNumber ?? index + 1}`;
-    const scaleMin = item.scaleMin ?? 1;
-    if (!Number.isFinite(item.scaleMax) || !Number.isFinite(scaleMin) || scaleMin >= item.scaleMax) {
-      errors.push(`${label}: حدود السُلَّم غير صالحة.`);
-      return;
-    }
-    if (!Number.isFinite(item.mean) || item.mean < scaleMin || item.mean > item.scaleMax) {
-      errors.push(`${label}: المتوسط ${item.mean} خارج السُلَّم ${scaleMin}-${item.scaleMax}.`);
-    }
-    if (!Number.isFinite(item.relativeWeight) || item.relativeWeight < 0 || item.relativeWeight > 100) {
-      errors.push(`${label}: الوزن النسبي ${item.relativeWeight}% خارج النطاق 0-100%.`);
-    }
-    if (!Number.isFinite(item.count) || item.count < 0) {
-      errors.push(`${label}: عدد الاستجابات الصالحة غير صحيح.`);
-    }
-  });
-
-  if (
-    !Number.isFinite(candidate.overallAverage) ||
-    candidate.overallAverage < 0 ||
-    candidate.overallAverage > 100
-  ) {
-    errors.push(`المتوسط العام ${candidate.overallAverage}% خارج النطاق 0-100%.`);
-  }
-
-  return errors;
+  return auditReport(data as ReportData).errors.map(formatAuditIssue);
 }
 
 export function validateReportData(data: unknown): data is ReportData {
